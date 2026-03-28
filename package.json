@@ -1,6 +1,5 @@
 {
-  "name": "install_tmp",
-  "version": "1.0.0",
+  "license": "0BSD",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -9,18 +8,14 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "@react-native-async-storage/async-storage": "^3.0.2",
-    "expo": "~55.0.8",
-    "expo-location": "^55.1.4",
-    "expo-notifications": "^55.0.13",
-    "expo-status-bar": "~55.0.4",
-    "expo-task-manager": "^55.0.10",
-    "lottie-react-native": "^7.3.6",
-    "react": "19.2.0",
-    "react-native": "0.83.2",
-    "react-native-gesture-handler": "^2.30.0",
-    "react-native-reanimated": "^4.3.0",
-    "zustand": "^5.0.12"
+    "expo": "~54.0.33",
+    "expo-status-bar": "~3.0.9",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-paper": "4.9.2",
+    "@expo/vector-icons": "^15.0.3",
+    "expo-location": "~19.0.8",
+    "@react-native-async-storage/async-storage": "2.2.0"
   },
   "private": true
 }
