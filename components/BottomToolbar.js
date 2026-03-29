@@ -1,16 +1,13 @@
 import React from 'react';
-import { StyleSheet, View, TouchableOpacity } from 'react-native';
-// ACHTUNG: Wir importieren jetzt MaterialCommunityIcons statt Ionicons!
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { StyleSheet, View, TouchableOpacity, Image } from 'react-native';
 
 export default function BottomToolbar({ activeTool, onSelectTool }) {
-  // Hier ist die neue Liste mit deinen Wunsch-Icons
   const tools = [
-    { id: 1, icon: 'food-apple', name: 'Essen' },         // Ein Apfel (Alternativen: 'food-drumstick', 'bowl')
-    { id: 2, icon: 'cup-water', name: 'Trinken' },        // Ein Wasserglas
-    { id: 3, icon: 'hand-heart', name: 'Streicheln' },    // Eine Hand mit einem Herz
-    { id: 4, icon: 'sponge', name: 'Schwamm' },           // Ein Schwamm
-    { id: 5, icon: 'chat-outline', name: 'Sprechblase' }, // Eine Sprechblase
+    { id: 1, image: require('../assets/tool_food.png'), name: 'Essen' },
+    { id: 2, image: require('../assets/tool_coke.png'), name: 'Trinken' },
+    { id: 3, image: require('../assets/tool_hand.png'), name: 'Streicheln' },
+    { id: 4, image: require('../assets/tool_sponge.png'), name: 'Schwamm' },
+    { id: 5, image: require('../assets/tool_talk.png'), name: 'Sprechblase' },
   ];
 
   return (
@@ -24,11 +21,12 @@ export default function BottomToolbar({ activeTool, onSelectTool }) {
           ]}
           onPress={() => onSelectTool(tool.id)}
         >
-          {/* Die Komponente heißt jetzt entsprechend MaterialCommunityIcons */}
-          <MaterialCommunityIcons 
-            name={tool.icon} 
-            size={26} // Minimal größer gemacht, da diese Icons oft feiner sind
-            color={activeTool === tool.id ? '#fff' : '#333'} 
+          <Image 
+            source={tool.image} 
+            style={[
+                styles.toolImage,
+                activeTool === tool.id && { tintColor: '#4e342e' }
+            ]} 
           />
         </TouchableOpacity>
       ))}
@@ -42,10 +40,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    backgroundColor: '#eee',
+    backgroundColor: '#8d6e63', 
     borderTopWidth: 1,
-    borderTopColor: '#ccc',
-    paddingBottom: 20, 
+    borderTopColor: '#5d4037', 
+    // paddingBottom: 20 entfernt - Icons sind nun exakt horizontal und vertikal zentriert!
   },
   toolButton: {
     width: 50,
@@ -61,6 +59,12 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
   },
   activeToolButton: {
-    backgroundColor: '#007AFF', 
+    backgroundColor: '#90caf9', 
   },
+  toolImage: {
+    width: 28, 
+    height: 28,
+    resizeMode: 'contain', 
+    tintColor: '#4e342e',
+  }
 });
