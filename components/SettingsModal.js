@@ -1,17 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  Modal, 
-  TextInput, 
-  TouchableOpacity, 
-  ActivityIndicator
-} from 'react-native';
-import * as Location from 'expo-location';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { StyleSheet, Text, View, Modal, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
 
-// NEU: onReset Prop hinzugefügt
+// Importe für Services und Theme
+import { Theme } from '../constants/Theme';
+import { LocationService } from '../services/LocationService'; // NEU
+import { StorageService } from '../services/StorageService'; // NEU
+
 export default function SettingsModal({ visible, onClose, onSave, currentUserData, showDialog, onReset }) {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
@@ -32,28 +26,28 @@ export default function SettingsModal({ visible, onClose, onSave, currentUserDat
 
     setLoading(true);
     try {
-      let geoResult = await Location.geocodeAsync(address);
+      // NEU: Adress-Validierung über den LocationService
+      const geoResult = await LocationService.getCoordinatesFromAddress(address);
 
-      if (geoResult.length > 0) {
-        const { latitude, longitude } = geoResult[0];
-        
+      if (geoResult.success) {
         const newData = {
           name: name,
           address: address,
-          lat: latitude,
-          lon: longitude
+          lat: geoResult.lat,
+          lon: geoResult.lon
         };
 
-        await AsyncStorage.setItem('@user_data', JSON.stringify(newData));
+        // NEU: Speichern über den StorageService
+        await StorageService.saveUserData(newData);
         
         onSave(newData);
         onClose();
         showDialog('Erfolg', 'Profil wurde aktualisiert!');
       } else {
-        showDialog('Fehler', 'Die Adresse konnte nicht gefunden werden. Bitte prüfe deine Eingabe.');
+        showDialog('Fehler', 'Die Adresse konnte nicht gefunden werden.');
       }
     } catch (error) {
-      showDialog('Fehler', 'Validierung fehlgeschlagen.');
+      showDialog('Fehler', 'Ein unerwarteter Fehler ist aufgetreten.');
     } finally {
       setLoading(false);
     }
@@ -71,7 +65,7 @@ export default function SettingsModal({ visible, onClose, onSave, currentUserDat
             value={name}
             onChangeText={setName}
             placeholder="Name eingeben..."
-            placeholderTextColor="#999"
+            placeholderTextColor={Theme.colors.textPlaceholder}
           />
 
           <Text style={styles.label}>Deine Adresse:</Text>
@@ -80,12 +74,12 @@ export default function SettingsModal({ visible, onClose, onSave, currentUserDat
             value={address}
             onChangeText={setAddress}
             placeholder="Straße, Ort..."
-            placeholderTextColor="#999"
+            placeholderTextColor={Theme.colors.textPlaceholder}
             multiline
           />
 
           {loading ? (
-            <ActivityIndicator size="large" color="#4e342e" />
+            <ActivityIndicator size="large" color={Theme.colors.primaryBrown} />
           ) : (
             <View style={styles.buttonRow}>
               <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
@@ -97,13 +91,11 @@ export default function SettingsModal({ visible, onClose, onSave, currentUserDat
             </View>
           )}
 
-          {/* NEU: Danger Zone für den Reset */}
           <View style={styles.dangerZone}>
             <TouchableOpacity style={styles.resetButton} onPress={onReset}>
               <Text style={styles.buttonTextLight}>Spielstand zurücksetzen</Text>
             </TouchableOpacity>
           </View>
-
         </View>
       </View>
     </Modal>
@@ -111,85 +103,17 @@ export default function SettingsModal({ visible, onClose, onSave, currentUserDat
 }
 
 const styles = StyleSheet.create({
-  modalOverlay: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    backgroundColor: 'rgba(0,0,0,0.5)' 
-  },
-  modalContent: { 
-    width: '85%', 
-    padding: 20, 
-    backgroundColor: '#fff9c4', 
-    borderRadius: 15,
-    elevation: 5,
-  },
-  modalTitle: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    marginBottom: 20, 
-    textAlign: 'center',
-    color: '#4e342e'
-  },
-  label: { 
-    fontSize: 14, 
-    color: '#4e342e', 
-    marginBottom: 5,
-    fontWeight: '600'
-  },
-  input: { 
-    borderWidth: 1, 
-    borderColor: '#ccc', 
-    borderRadius: 8, 
-    padding: 10, 
-    marginBottom: 15, 
-    fontSize: 16,
-    color: '#4e342e',
-    backgroundColor: '#fff', 
-  },
-  textArea: { 
-    height: 60, 
-    textAlignVertical: 'top' 
-  },
-  buttonRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    marginTop: 10 
-  },
-  saveButton: { 
-    backgroundColor: '#4e342e', 
-    padding: 12, 
-    borderRadius: 8, 
-    flex: 1, 
-    marginLeft: 5, 
-    alignItems: 'center' 
-  },
-  cancelButton: { 
-    backgroundColor: '#eee', 
-    padding: 12, 
-    borderRadius: 8, 
-    flex: 1, 
-    marginRight: 5, 
-    alignItems: 'center' 
-  },
-  buttonText: { 
-    fontWeight: 'bold',
-    color: '#4e342e'
-  },
-  buttonTextLight: { 
-    fontWeight: 'bold',
-    color: '#fff'
-  },
-  dangerZone: {
-    marginTop: 30,
-    borderTopWidth: 1,
-    borderTopColor: '#ccc',
-    paddingTop: 15,
-  },
-  resetButton: {
-    backgroundColor: '#d32f2f', // Rote Warnfarbe
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  }
+  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Theme.colors.overlayDark },
+  modalContent: { width: '85%', padding: Theme.spacing.large, backgroundColor: Theme.colors.modalYellow, borderRadius: Theme.borderRadius.medium, elevation: 5 },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: Theme.spacing.large, textAlign: 'center', color: Theme.colors.primaryBrown },
+  label: { fontSize: 14, color: Theme.colors.primaryBrown, marginBottom: Theme.spacing.xs, fontWeight: '600' },
+  input: { borderWidth: 1, borderColor: Theme.colors.borderLight, borderRadius: Theme.borderRadius.small, padding: Theme.spacing.small, marginBottom: Theme.spacing.medium, fontSize: 16, color: Theme.colors.primaryBrown, backgroundColor: Theme.colors.white },
+  textArea: { height: 60, textAlignVertical: 'top' },
+  buttonRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: Theme.spacing.small },
+  saveButton: { backgroundColor: Theme.colors.primaryBrown, padding: 12, borderRadius: Theme.borderRadius.small, flex: 1, marginLeft: 5, alignItems: 'center' },
+  cancelButton: { backgroundColor: Theme.colors.cancelButton, padding: 12, borderRadius: Theme.borderRadius.small, flex: 1, marginRight: 5, alignItems: 'center' },
+  buttonText: { fontWeight: 'bold', color: Theme.colors.primaryBrown },
+  buttonTextLight: { fontWeight: 'bold', color: Theme.colors.white },
+  dangerZone: { marginTop: 30, borderTopWidth: 1, borderTopColor: Theme.colors.borderLight, paddingTop: Theme.spacing.medium },
+  resetButton: { backgroundColor: Theme.colors.dangerRed, padding: 12, borderRadius: Theme.borderRadius.small, alignItems: 'center' }
 });

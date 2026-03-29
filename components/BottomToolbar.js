@@ -1,6 +1,9 @@
 import React from 'react';
 import { StyleSheet, View, TouchableOpacity, Image } from 'react-native';
 
+// NEU: Importiere das Theme
+import { Theme } from '../constants/Theme';
+
 export default function BottomToolbar({ activeTool, onSelectTool }) {
   const tools = [
     { id: 1, image: require('../assets/tool_food.png'), name: 'Essen' },
@@ -37,17 +40,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    backgroundColor: '#8d6e63', 
+    backgroundColor: Theme.colors.background, 
     borderTopWidth: 1,
-    borderTopColor: '#5d4037', 
+    borderTopColor: Theme.colors.toolbarBorder, 
   },
   toolButton: {
     width: 50,
     height: 50,
-    borderRadius: 25,
+    borderRadius: Theme.borderRadius.roundButton,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: Theme.colors.white,
     elevation: 3, 
     shadowColor: '#000', 
     shadowOffset: { width: 0, height: 2 },
@@ -55,12 +58,11 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
   },
   activeToolButton: {
-    backgroundColor: '#90caf9', 
+    backgroundColor: Theme.colors.activeTool, 
   },
   toolImage: {
     width: 28, 
     height: 28,
     resizeMode: 'contain', 
-    // tintColor entfernt
   }
 });

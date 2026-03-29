@@ -1,6 +1,9 @@
 import React from 'react';
 import { StyleSheet, View, Modal, Text, TouchableOpacity } from 'react-native';
 
+// NEU: Importiere das Theme
+import { Theme } from '../constants/Theme';
+
 export default function InfoDialog({ visible, title, message, onClose, buttonText = "Alles klar!" }) {
   if (!visible) return null;
 
@@ -26,13 +29,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)', 
+    backgroundColor: Theme.colors.overlayDark, 
   },
   modalContent: {
     width: '80%',
-    padding: 25,
-    backgroundColor: '#fff9c4', 
-    borderRadius: 20,
+    padding: Theme.spacing.xlarge,
+    backgroundColor: Theme.colors.modalYellow, 
+    borderRadius: Theme.borderRadius.large,
     alignItems: 'center',
     elevation: 5,
     shadowColor: '#000',
@@ -43,29 +46,27 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 22,
     fontWeight: 'bold',
-    // Hier ist unser gewünschtes Dunkelbraun für den Titel
-    color: '#4e342e',
-    marginBottom: 15,
+    color: Theme.colors.primaryBrown,
+    marginBottom: Theme.spacing.medium,
     textAlign: 'center',
   },
   modalText: {
     fontSize: 16,
-    // Und hier für den normalen Text
-    color: '#4e342e',
+    color: Theme.colors.primaryBrown,
     textAlign: 'center',
-    marginBottom: 25,
+    marginBottom: Theme.spacing.xlarge,
     lineHeight: 22,
   },
   closeButton: {
-    backgroundColor: '#4e342e',
+    backgroundColor: Theme.colors.primaryBrown,
     paddingVertical: 12,
     paddingHorizontal: 30,
-    borderRadius: 10,
+    borderRadius: Theme.borderRadius.small,
     width: '100%',
     alignItems: 'center',
   },
   closeButtonText: {
-    color: '#fff',
+    color: Theme.colors.white,
     fontWeight: 'bold',
     fontSize: 16,
   },

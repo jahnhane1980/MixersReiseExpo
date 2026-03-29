@@ -1,9 +1,9 @@
 import React from 'react';
 import { StyleSheet, View, Modal, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { Theme } from '../constants/Theme'; // NEU
 
 export default function DiscoveryModal({ visible, onClose, logbookData }) {
   
-  // Wir sortieren die Daten absteigend nach der Anzahl der gesammelten Herzen
   const sortedData = [...(logbookData || [])].sort((a, b) => b.count - a.count);
 
   return (
@@ -43,70 +43,70 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: Theme.colors.overlayDark, // NEU
   },
   modalContent: {
     width: '85%',
     maxHeight: '70%',
-    padding: 20,
-    backgroundColor: '#fff9c4', 
-    borderRadius: 20,
+    padding: Theme.spacing.large, // NEU
+    backgroundColor: Theme.colors.modalYellow, // NEU
+    borderRadius: Theme.borderRadius.large, // NEU
     alignItems: 'center',
   },
   modalTitle: {
     fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 20,
-    color: '#4e342e',
+    marginBottom: Theme.spacing.large, // NEU
+    color: Theme.colors.primaryBrown, // NEU
   },
   tableContainer: {
     width: '100%',
-    marginBottom: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.6)', 
+    marginBottom: Theme.spacing.large, // NEU
+    backgroundColor: Theme.colors.overlayLight, // NEU
     borderRadius: 12,
-    padding: 10, 
+    padding: Theme.spacing.small, // NEU
   },
   emptyText: {
-    color: '#4e342e',
+    color: Theme.colors.primaryBrown, // NEU
     textAlign: 'center',
     fontStyle: 'italic',
-    padding: 10,
+    padding: Theme.spacing.small, // NEU
   },
   tableRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0d8a4', 
+    borderBottomColor: Theme.colors.toolbarBorder, // NEU
     paddingVertical: 12,
   },
   columnLeft: {
     flex: 1,
     alignItems: 'flex-start',
-    paddingLeft: 10,
+    paddingLeft: Theme.spacing.small, // NEU
     borderRightWidth: 1,
-    borderRightColor: '#e0d8a4',
+    borderRightColor: Theme.colors.toolbarBorder, // NEU
   },
   columnRight: {
     flex: 2,
     alignItems: 'flex-start',
-    paddingLeft: 15,
+    paddingLeft: Theme.spacing.medium, // NEU
   },
   cellText: {
     fontSize: 16,
-    color: '#4e342e',
+    color: Theme.colors.primaryBrown, // NEU
   },
   cellTextBold: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#4e342e',
+    color: Theme.colors.primaryBrown, // NEU
   },
   closeButton: {
-    backgroundColor: '#4e342e',
+    backgroundColor: Theme.colors.primaryBrown, // NEU
     paddingVertical: 12,
     paddingHorizontal: 30,
-    borderRadius: 10,
+    borderRadius: Theme.borderRadius.small, // NEU
   },
   closeButtonText: {
-    color: '#fff',
+    color: Theme.colors.white, // NEU
     fontWeight: 'bold',
     fontSize: 16,
   },

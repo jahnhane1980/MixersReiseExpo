@@ -1,48 +1,37 @@
 import React, { useRef, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Theme } from '../constants/Theme'; // NEU
 
 export default function TopBar({ count, onOpenSettings, onOpenInfo }) {
-  // Zentrale Text- und Icon-Farbe (auf Braun gut lesbar)
-  const textColor = '#fff9c4';
+  const textColor = Theme.colors.modalYellow; // NEU
 
-  // Animated.Value für die Puls-Animation des Herzens
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  // Ref, um den vorherigen Punktestand zu speichern
   const prevCount = useRef(count);
 
-  // useEffect, der nur läuft, wenn sich 'count' ändert
   useEffect(() => {
-    // Wir pulsieren nur, wenn ein Herz *hinzugefügt* wurde
     if (count > prevCount.current) {
-      // Start der Puls-Sequenz (Schnell größer, etwas langsamer zurück)
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.4, // Kurz 40% größer
+          toValue: 1.4, 
           duration: 100,
           useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
-          toValue: 1, // Zurück zur Normalgröße
+          toValue: 1, 
           duration: 200,
           useNativeDriver: true,
         })
       ]).start();
     }
-    // Den aktuellen count für den nächsten Vergleich speichern
     prevCount.current = count;
   }, [count, pulseAnim]);
 
   return (
     <View style={styles.topBar}>
-      {/* Container für den Herz-Counter */}
       <View style={styles.heartCounter}>
-        
-        {/* WICHTIG: Das Schatten-Herz für Tiefe */}
-        {/* Wir legen ein dunkleres Herz leicht versetzt darunter */}
         <Ionicons name="heart" size={28} color="#c0392b" style={styles.heartShadow} />
         
-        {/* Das pulsierende Haupt-Herz (#FF5252) */}
         <Animated.View style={[styles.pulsingHeart, { transform: [{ scale: pulseAnim }] }]}>
           <Ionicons name="heart" size={28} color="#FF5252" />
         </Animated.View>
@@ -68,38 +57,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    backgroundColor: '#8d6e63', 
+    paddingHorizontal: Theme.spacing.large, // NEU
+    backgroundColor: Theme.colors.background, // NEU
     borderBottomWidth: 1,
-    borderBottomColor: '#5d4037', 
-    elevation: 5, // Ein kleiner Schatten unter der gesamten Leiste
+    borderBottomColor: Theme.colors.toolbarBorder, // NEU
+    elevation: 5, 
   },
   heartCounter: {
     flexDirection: 'row',
     alignItems: 'center',
-    position: 'relative', // Nötig für das absolute Schatten-Herz
+    position: 'relative', 
   },
   pulsingHeart: {
-    // Container für das pulsierende Herz
   },
   heartShadow: {
-    // Das Schatten-Herz wird absolut über dem Haupt-Herz platziert, 
-    // aber um 2 Pixel nach unten/rechts versetzt.
     position: 'absolute',
     top: 2, 
     left: 2, 
-    opacity: 0.7, // Etwas transparenter
+    opacity: 0.7, 
   },
   counterText: {
     fontSize: 22, 
     fontWeight: 'bold',
-    color: '#fff9c4',
-    marginLeft: 8, // Abstand zu den stacked Herzen
+    color: Theme.colors.modalYellow, // NEU
+    marginLeft: 8, 
   },
   topBarIcons: {
     flexDirection: 'row',
   },
   iconButton: {
-    marginLeft: 15,
+    marginLeft: Theme.spacing.medium, // NEU
   },
 });
