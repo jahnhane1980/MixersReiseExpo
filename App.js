@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, SafeAreaView, Alert, View } from 'react-native';
+import { StyleSheet, SafeAreaView, View } from 'react-native';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -8,6 +8,7 @@ import BottomToolbar from './components/BottomToolbar';
 import InteractiveArea from './components/InteractiveArea';
 import SettingsModal from './components/SettingsModal';
 import DiscoveryModal from './components/DiscoveryModal';
+import InfoDialog from './components/InfoDialog'; 
 
 // --- HILFSFUNKTIONEN ---
 const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
@@ -32,16 +33,26 @@ const TOOL_BASE_POINTS = {
 export default function App() {
   const [count, setCount] = useState(0);
   const [activeTool, setActiveTool] = useState(null);
+  
   const [isSettingsVisible, setSettingsVisible] = useState(false);
   const [isInfoVisible, setInfoVisible] = useState(false);
+  const [dialogConfig, setDialogConfig] = useState({ visible: false, title: '', message: '' });
   
   const [userData, setUserData] = useState({ name: 'Entdecker', address: 'Suche...', lat: 0, lon: 0 });
   const [currentLocation, setCurrentLocation] = useState({ city: 'Unbekannt', lat: 0, lon: 0 });
   const [logbook, setLogbook] = useState([]);
   const [rewardEvent, setRewardEvent] = useState({ id: 0, amount: 0 });
 
+  const [isAppReady, setIsAppReady] = useState(false);
+
+  const showDialog = (title, message) => {
+    setDialogConfig({ visible: true, title, message });
+  };
+
   useEffect(() => {
     const initialize = async () => {
+      let currentUserName = 'Entdecker'; // NEU: Wir merken uns den Namen für die Begrüßung
+
       try {
         const savedCount = await AsyncStorage.getItem('@punktestand');
         if (savedCount) setCount(parseInt(savedCount, 10));
@@ -50,7 +61,11 @@ export default function App() {
         if (savedLogbook) setLogbook(JSON.parse(savedLogbook));
 
         const savedUser = await AsyncStorage.getItem('@user_data');
-        if (savedUser) setUserData(JSON.parse(savedUser));
+        if (savedUser) {
+          const parsedUser = JSON.parse(savedUser);
+          setUserData(parsedUser);
+          if (parsedUser.name) currentUserName = parsedUser.name; // Namen übernehmen
+        }
 
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
@@ -76,27 +91,52 @@ export default function App() {
               };
               setUserData(initialData);
               await AsyncStorage.setItem('@user_data', JSON.stringify(initialData));
+              currentUserName = 'Entdecker';
             }
           }
         }
       } catch (e) {
         console.error("Fehler im Init:", e);
+      } finally {
+        setIsAppReady(true);
+        // NEU: Begrüßung abfeuern, sobald alles geladen ist!
+        showDialog("Willkommen zurück!", `Hallo ${currentUserName}, schön, dass du da bist!`);
       }
     };
     initialize();
   }, []);
 
   useEffect(() => {
-    AsyncStorage.setItem('@punktestand', count.toString());
-  }, [count]);
+    if (isAppReady) {
+      AsyncStorage.setItem('@punktestand', count.toString());
+    }
+  }, [count, isAppReady]);
 
   useEffect(() => {
-    AsyncStorage.setItem('@logbook', JSON.stringify(logbook));
-  }, [logbook]);
+    if (isAppReady) {
+      AsyncStorage.setItem('@logbook', JSON.stringify(logbook));
+    }
+  }, [logbook, isAppReady]);
 
-  // Diese Funktion wird jetzt erst aufgerufen, NACHDEM das Drag&Drop fertig ist
+  const handleResetData = async () => {
+    setCount(0);
+    setLogbook([]);
+    await AsyncStorage.removeItem('@punktestand');
+    await AsyncStorage.removeItem('@logbook');
+    setSettingsVisible(false);
+    showDialog("Erledigt", "Alle gesammelten Herzen und das Logbuch wurden erfolgreich zurückgesetzt!");
+  };
+
   const handleMainImagePress = () => {
-    if (activeTool === null) return;
+    if (activeTool === null) {
+      showDialog("Hinweis", "Bitte wähle zuerst unten ein Tool aus!");
+      return;
+    }
+
+    if (currentLocation.city === 'Unbekannt') {
+      showDialog("GPS lädt noch 🛰️", "Dein Standort wird noch ermittelt oder GPS ist blockiert. Bitte warte einen kurzen Moment!");
+      return; 
+    }
 
     const basePoints = TOOL_BASE_POINTS[activeTool] || 0;
 
@@ -115,29 +155,30 @@ export default function App() {
     setCount(prev => prev + earnedHearts);
     setRewardEvent({ id: Date.now(), amount: earnedHearts });
 
-    const cityExists = logbook.find(entry => entry.city === currentLocation.city);
+    const isHomeCity = userData.address && currentLocation.city 
+      ? userData.address.toLowerCase().includes(currentLocation.city.toLowerCase()) 
+      : false;
     
-    if (!cityExists) {
+    const cityAlreadyInLogbook = logbook.some(entry => entry.city === currentLocation.city);
+    
+    if (!cityAlreadyInLogbook && !isHomeCity) {
       if (multiplier > 1) {
-        Alert.alert(
-          "Neue Stadt entdeckt! 🌍", 
-          `Hey, du bist in ${currentLocation.city} und bekommst x${multiplier} Herzen für jede Aktion!`
-        );
+        showDialog("Neue Stadt entdeckt! 🌍", `Hey, du bist in ${currentLocation.city} und bekommst x${multiplier} Herzen für jede Aktion!`);
       } else {
-        Alert.alert(
-          "Neue Stadt entdeckt! 🌍", 
-          `Willkommen in ${currentLocation.city}! Fange an, hier Herzen zu sammeln.`
-        );
+        showDialog("Neue Stadt entdeckt! 🌍", `Willkommen in ${currentLocation.city}! Fange an, hier Herzen zu sammeln.`);
       }
     }
 
     setLogbook(prevLogbook => {
-      if (cityExists) {
-        return prevLogbook.map(entry => 
-          entry.city === currentLocation.city 
-            ? { ...entry, count: entry.count + earnedHearts } 
-            : entry
-        );
+      const existingIndex = prevLogbook.findIndex(entry => entry.city === currentLocation.city);
+      
+      if (existingIndex >= 0) {
+        const newLogbook = [...prevLogbook];
+        newLogbook[existingIndex] = {
+          ...newLogbook[existingIndex],
+          count: newLogbook[existingIndex].count + earnedHearts
+        };
+        return newLogbook;
       } else {
         return [...prevLogbook, { id: Date.now().toString(), city: currentLocation.city, count: earnedHearts }];
       }
@@ -155,7 +196,7 @@ export default function App() {
       <InteractiveArea 
         rewardEvent={rewardEvent} 
         onApplyTool={handleMainImagePress} 
-        activeTool={activeTool} // NEU: Damit die Area weiß, welches Bild sie rendern muss
+        activeTool={activeTool} 
       />
 
       <BottomToolbar activeTool={activeTool} onSelectTool={setActiveTool} />
@@ -165,12 +206,21 @@ export default function App() {
         currentUserData={userData} 
         onClose={() => setSettingsVisible(false)} 
         onSave={setUserData} 
+        showDialog={showDialog} 
+        onReset={handleResetData}
       />
 
       <DiscoveryModal 
         visible={isInfoVisible} 
         onClose={() => setInfoVisible(false)} 
         logbookData={logbook} 
+      />
+
+      <InfoDialog 
+        visible={dialogConfig.visible}
+        title={dialogConfig.title}
+        message={dialogConfig.message}
+        onClose={() => setDialogConfig({ ...dialogConfig, visible: false })}
       />
     </SafeAreaView>
   );

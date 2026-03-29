@@ -47,16 +47,16 @@ export default function InteractiveArea({ onPress, onApplyTool, rewardEvent, act
   const [heartList, setHeartList] = useState([]);
   const prevEventId = useRef(rewardEvent.id);
 
-  // --- NEU: Der "Briefkasten" für die aktuellsten Funktionen ---
   const callbacksRef = useRef({ onPress, onApplyTool });
   useEffect(() => {
-    // Wird bei jedem Render aktualisiert, so haben wir immer die frischesten Daten
     callbacksRef.current = { onPress, onApplyTool };
   }, [onPress, onApplyTool]);
 
   // --- DRAG & DROP REFS ---
   const pan = useRef(new Animated.ValueXY()).current;
-  const toolOpacity = useRef(new Animated.Value(1)).current;
+  const snapScale = useRef(new Animated.Value(1)).current; 
+  // NEU: Animationswert für das Kuscheltier (0 = normal, 1 = reagiert)
+  const plushieReactAnim = useRef(new Animated.Value(0)).current; 
   const isApplyingRef = useRef(false); 
 
   const panResponder = useRef(
@@ -74,31 +74,47 @@ export default function InteractiveArea({ onPress, onApplyTool, rewardEvent, act
       onPanResponderRelease: (e, gesture) => {
         pan.flattenOffset();
         
-        // Check: Weit genug nach oben gezogen?
         if (gesture.dy < -100) {
           isApplyingRef.current = true; 
           
+          // NEU: Parallel ablaufende Animationen für Tool UND Kuscheltier
+          Animated.parallel([
+            // 1. Tool-Snap
+            Animated.sequence([
+              Animated.timing(snapScale, { toValue: 1.4, duration: 150, useNativeDriver: false }),
+              Animated.spring(snapScale, { toValue: 1, friction: 4, useNativeDriver: false })
+            ]),
+            // 2. Kuscheltier reagiert (wird dunkler & drückt sich etwas zusammen)
+            Animated.timing(plushieReactAnim, { toValue: 1, duration: 200, useNativeDriver: false })
+          ]).start();
+          
           setTimeout(() => {
-            Animated.timing(toolOpacity, {
-              toValue: 0,
-              duration: 500,
-              useNativeDriver: false,
-            }).start(() => {
-              
-              // HIER GREIFEN WIR JETZT IN DEN BRIEFKASTEN!
-              const currentOnPress = callbacksRef.current.onPress;
-              const currentOnApplyTool = callbacksRef.current.onApplyTool;
-              
-              if (currentOnPress) currentOnPress();
-              else if (currentOnApplyTool) currentOnApplyTool();
-              
-              pan.setValue({ x: 0, y: 0 });
-              toolOpacity.setValue(1);
-              isApplyingRef.current = false;
+            // Federt an die Startposition zurück UND Kuscheltier erholt sich
+            Animated.parallel([
+              Animated.spring(pan, {
+                  toValue: { x: 0, y: 0 },
+                  tension: 40, 
+                  friction: 6, 
+                  useNativeDriver: false,
+              }),
+              Animated.timing(plushieReactAnim, { 
+                  toValue: 0, 
+                  duration: 300, 
+                  useNativeDriver: false 
+              })
+            ]).start(() => {
+                const currentOnPress = callbacksRef.current.onPress;
+                const currentOnApplyTool = callbacksRef.current.onApplyTool;
+                
+                if (currentOnPress) currentOnPress();
+                else if (currentOnApplyTool) currentOnApplyTool();
+                
+                isApplyingRef.current = false;
             });
           }, 3000); 
 
         } else {
+          // Zu wenig gezogen: Icon federt an den Startpunkt zurück
           Animated.spring(pan, {
             toValue: { x: 0, y: 0 },
             useNativeDriver: false,
@@ -123,6 +139,17 @@ export default function InteractiveArea({ onPress, onApplyTool, rewardEvent, act
     }
   }, [rewardEvent]);
 
+  // --- NEU: Interpolationen für das Kuscheltier ---
+  const plushieScale = plushieReactAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0.95] // Drückt sich um 5% zusammen
+  });
+  
+  const plushieOpacity = plushieReactAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0.6] // Fällt auf 60% Sichtbarkeit (wirkt wie ausgegraut)
+  });
+
   return (
     <ImageBackground 
       source={require('../assets/bg_bedroom_plushies.png')} 
@@ -131,9 +158,16 @@ export default function InteractiveArea({ onPress, onApplyTool, rewardEvent, act
       imageStyle={styles.backgroundImageZoom} 
     >
       <View style={styles.imageContainer}>
-        <Image 
+        {/* NEU: Das Kuscheltier ist jetzt animiert und nutzt unsere Interpolationen */}
+        <Animated.Image 
           source={require('../assets/mixer_idle.png')} 
-          style={styles.interactiveImage}
+          style={[
+            styles.interactiveImage,
+            {
+              transform: [{ scale: plushieScale }],
+              opacity: plushieOpacity
+            }
+          ]}
           resizeMode="contain" 
         />
         
@@ -155,8 +189,10 @@ export default function InteractiveArea({ onPress, onApplyTool, rewardEvent, act
           style={[
             styles.draggableToolContainer,
             { 
-              opacity: toolOpacity,
-              transform: pan.getTranslateTransform() 
+              transform: [
+                ...pan.getTranslateTransform(),
+                { scale: snapScale }
+              ]
             } 
           ]}
         >
@@ -209,19 +245,14 @@ const styles = StyleSheet.create({
   },
   draggableToolContainer: {
     position: 'absolute',
-    bottom: 50, 
+    bottom: 10, 
     left: '50%', 
-    marginLeft: -38, 
+    marginLeft: -56, 
     zIndex: 10,
-    elevation: 10,
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    padding: 10,
-    borderRadius: 38, 
   },
   draggableImage: {
-    width: 56,  
-    height: 56,
+    width: 112,  
+    height: 112,
     resizeMode: 'contain', 
-    tintColor: '#4e342e', 
   }
 });

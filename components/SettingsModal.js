@@ -6,13 +6,13 @@ import {
   Modal, 
   TextInput, 
   TouchableOpacity, 
-  ActivityIndicator,
-  Alert 
+  ActivityIndicator
 } from 'react-native';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export default function SettingsModal({ visible, onClose, onSave, currentUserData }) {
+// NEU: onReset Prop hinzugefügt
+export default function SettingsModal({ visible, onClose, onSave, currentUserData, showDialog, onReset }) {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,7 +26,7 @@ export default function SettingsModal({ visible, onClose, onSave, currentUserDat
 
   const handleSave = async () => {
     if (name.trim() === '' || address.trim() === '') {
-      Alert.alert('Fehler', 'Name und Adresse dürfen nicht leer sein.');
+      showDialog('Fehler', 'Name und Adresse dürfen nicht leer sein.');
       return;
     }
 
@@ -48,12 +48,12 @@ export default function SettingsModal({ visible, onClose, onSave, currentUserDat
         
         onSave(newData);
         onClose();
-        Alert.alert('Erfolg', 'Profil wurde aktualisiert!');
+        showDialog('Erfolg', 'Profil wurde aktualisiert!');
       } else {
-        Alert.alert('Fehler', 'Die Adresse konnte nicht gefunden werden. Bitte prüfe deine Eingabe.');
+        showDialog('Fehler', 'Die Adresse konnte nicht gefunden werden. Bitte prüfe deine Eingabe.');
       }
     } catch (error) {
-      Alert.alert('Fehler', 'Validierung fehlgeschlagen.');
+      showDialog('Fehler', 'Validierung fehlgeschlagen.');
     } finally {
       setLoading(false);
     }
@@ -96,6 +96,14 @@ export default function SettingsModal({ visible, onClose, onSave, currentUserDat
               </TouchableOpacity>
             </View>
           )}
+
+          {/* NEU: Danger Zone für den Reset */}
+          <View style={styles.dangerZone}>
+            <TouchableOpacity style={styles.resetButton} onPress={onReset}>
+              <Text style={styles.buttonTextLight}>Spielstand zurücksetzen</Text>
+            </TouchableOpacity>
+          </View>
+
         </View>
       </View>
     </Modal>
@@ -112,7 +120,7 @@ const styles = StyleSheet.create({
   modalContent: { 
     width: '85%', 
     padding: 20, 
-    backgroundColor: '#fff9c4', // Auf Gelb gesetzt
+    backgroundColor: '#fff9c4', 
     borderRadius: 15,
     elevation: 5,
   },
@@ -137,7 +145,7 @@ const styles = StyleSheet.create({
     marginBottom: 15, 
     fontSize: 16,
     color: '#4e342e',
-    backgroundColor: '#fff', // Weißer Hintergrund für die Eingabefelder sieht auf Gelb besser aus
+    backgroundColor: '#fff', 
   },
   textArea: { 
     height: 60, 
@@ -171,5 +179,17 @@ const styles = StyleSheet.create({
   buttonTextLight: { 
     fontWeight: 'bold',
     color: '#fff'
+  },
+  dangerZone: {
+    marginTop: 30,
+    borderTopWidth: 1,
+    borderTopColor: '#ccc',
+    paddingTop: 15,
+  },
+  resetButton: {
+    backgroundColor: '#d32f2f', // Rote Warnfarbe
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
   }
 });

@@ -23,10 +23,7 @@ export default function BottomToolbar({ activeTool, onSelectTool }) {
         >
           <Image 
             source={tool.image} 
-            style={[
-                styles.toolImage,
-                activeTool === tool.id && { tintColor: '#4e342e' }
-            ]} 
+            style={styles.toolImage} 
           />
         </TouchableOpacity>
       ))}
@@ -43,7 +40,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#8d6e63', 
     borderTopWidth: 1,
     borderTopColor: '#5d4037', 
-    // paddingBottom: 20 entfernt - Icons sind nun exakt horizontal und vertikal zentriert!
   },
   toolButton: {
     width: 50,
@@ -65,6 +61,6 @@ const styles = StyleSheet.create({
     width: 28, 
     height: 28,
     resizeMode: 'contain', 
-    tintColor: '#4e342e',
+    // tintColor entfernt
   }
 });
