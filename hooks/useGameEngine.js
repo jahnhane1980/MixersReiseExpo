@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { StorageService } from '../services/StorageService';
 import { LocationService } from '../services/LocationService';
+import { TimeService } from '../services/TimeService';
 import { calculateEarnedHearts } from '../utils/gameLogic';
 import { getDistanceFromLatLonInKm } from '../utils/locationUtils';
 import { GameRules } from '../constants/GameRules';
@@ -13,23 +14,29 @@ export function useGameEngine(showDialog) {
   const [currentLocation, setCurrentLocation] = useState({ city: 'Unbekannt', lat: 0, lon: 0 });
   const [rewardEvent, setRewardEvent] = useState({ id: 0, amount: 0 });
   const [isAppReady, setIsAppReady] = useState(false);
+  const [isSleeping, setIsSleeping] = useState(false);
 
-  // Initialisierung beim Start
   useEffect(() => {
     const init = async () => {
-      let currentUserName = Config.DEFAULT_USERNAME;
+      let currentUserName = Config.DEFAULT_USERNAME; // Lokal zwischenspeichern für den Dialog
       const data = await StorageService.loadGameData();
+      
       setCount(data.punktestand);
       setLogbook(data.logbook);
       
       if (data.userData) {
         setUserData(data.userData);
-        currentUserName = data.userData.name || Config.DEFAULT_USERNAME;
+        currentUserName = data.userData.name || Config.DEFAULT_USERNAME; // Name aus Speicher holen
       }
 
       const locResult = await LocationService.getCurrentLocationData();
       if (locResult.success) {
         setCurrentLocation({ city: locResult.city, lat: locResult.lat, lon: locResult.lon });
+        
+        // Zeit am Reiseort prüfen
+        const timeData = await TimeService.getLocalTime(locResult.lat, locResult.lon);
+        setIsSleeping(TimeService.isMixerSleeping(timeData.hour));
+
         if (!data.userData) {
           const p = locResult.rawAddressData;
           const initialData = {
@@ -41,7 +48,9 @@ export function useGameEngine(showDialog) {
           await StorageService.saveUserData(initialData);
         }
       }
+      
       setIsAppReady(true);
+      // Willkommens-Dialog wieder drin!
       showDialog("Willkommen zurück!", `Hallo ${currentUserName}, schön, dass du da bist!`);
     };
     init();
@@ -55,22 +64,16 @@ export function useGameEngine(showDialog) {
     }
   }, [count, logbook, isAppReady]);
 
-  /**
-   * Verarbeitet Interaktionen.
-   * manualPoints wird für Dialoge genutzt, ansonsten greift die Geo-Logik.
-   */
   const processInteraction = (activeTool, manualPoints = null) => {
-    if (currentLocation.city === 'Unbekannt') return { success: false };
+    if (currentLocation.city === 'Unbekannt' || isSleeping) return { success: false };
 
     let earnedHearts = 0;
     let multiplier = 1;
     let isAtHome = false;
 
     if (manualPoints !== null) {
-      // Direkte Punktevergabe für Dialoge
       earnedHearts = manualPoints;
     } else {
-      // Standard Geo-Logik mit Anti-Cheat (Radius < 50m)
       const distance = getDistanceFromLatLonInKm(userData.lat, userData.lon, currentLocation.lat, currentLocation.lon);
       const result = calculateEarnedHearts(activeTool, distance, GameRules.TOOL_BASE_POINTS, GameRules.DISTANCE_THRESHOLDS);
       
@@ -82,12 +85,18 @@ export function useGameEngine(showDialog) {
     setCount(prev => prev + earnedHearts);
     setRewardEvent({ id: Date.now(), amount: earnedHearts });
 
-    // Logbuch Logik
+    // --- WIEDER EINGEBAUT: Logbuch & "Neue Stadt" Logik ---
     const isHomeCity = userData.address?.toLowerCase().includes(currentLocation.city.toLowerCase());
     const isNewCity = !logbook.some(e => e.city === currentLocation.city);
 
+    // Dialog nur zeigen, wenn es kein manueller Dialog-Punkt ist und wir nicht im Anti-Cheat-Bereich sind
     if (isNewCity && !isHomeCity && manualPoints === null && !isAtHome) {
-      showDialog("Neue Stadt!", multiplier > 1 ? `x${multiplier} Herzen in ${currentLocation.city}!` : `Willkommen in ${currentLocation.city}!`);
+      showDialog(
+        "Neue Stadt!", 
+        multiplier > 1 
+          ? `x${multiplier} Herzen in ${currentLocation.city}!` 
+          : `Willkommen in ${currentLocation.city}!`
+      );
     }
 
     setLogbook(prev => {
@@ -110,6 +119,6 @@ export function useGameEngine(showDialog) {
   };
 
   return {
-    count, logbook, userData, setUserData, currentLocation, rewardEvent, isAppReady, processInteraction, resetGame
+    count, logbook, userData, setUserData, currentLocation, rewardEvent, isAppReady, processInteraction, resetGame, isSleeping
   };
 }

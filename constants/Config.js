@@ -6,9 +6,7 @@ export const Config = {
   DEBUG_MODE: true,
   MOCK_LOCATION: false, 
   
-  // Zukünftige Automatisierungs-Regeln
-  AUTOMATION: {
-    MORNING_ROUTINE_TIME: '08:00',
-    EVENING_ROUTINE_TIME: '20:00',
-  }
+  // Nachtruhe-Einstellungen (direkt zugänglich)
+  NIGHT_MODE_START: '22:00',
+  NIGHT_MODE_END: '06:00'
 };

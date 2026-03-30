@@ -1,3 +1,4 @@
+// constants/Theme.js
 export const Theme = {
   colors: {
     background: '#8d6e63',
@@ -11,7 +12,9 @@ export const Theme = {
     cancelButton: '#eee',
     borderLight: '#ccc',
     overlayDark: 'rgba(0,0,0,0.5)',
-    overlayLight: 'rgba(255,255,255,0.8)'
+    overlayLight: 'rgba(255,255,255,0.8)',
+    // NEU: Die Farbe für den Nachtmodus
+    nightOverlay: 'rgba(0, 50, 71, 0.8)' 
   },
   animations: {
     heartParticleDuration: 1200,
