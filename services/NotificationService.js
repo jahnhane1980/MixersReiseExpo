@@ -1,19 +1,15 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-// Konfiguration, wie die App mit Benachrichtigungen umgeht, wenn sie im Vordergrund ist
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
-    shouldSetBadge: false,
+    shouldSetBadge: true, // Badge am App-Icon zeigen
   }),
 });
 
 export const NotificationService = {
-  /**
-   * Fordert die Berechtigung für Benachrichtigungen an.
-   */
   async requestPermissions() {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
@@ -21,31 +17,48 @@ export const NotificationService = {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
-    return finalStatus === 'granted';
+
+    if (finalStatus !== 'granted') return false;
+
+    // KANAL-OPTIMIERUNG FÜR MAXIMALE AUFMERKSAMKEIT
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('mixer-urgent', {
+        name: 'Mixer Wichtige Meldungen',
+        importance: Notifications.AndroidImportance.MAX, // ERZWINGT HEADS-UP
+        vibrationPattern: [0, 250, 250, 250, 500, 250], // Markantes Muster
+        lightColor: '#FF231F7C',
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+        bypassDnd: true, // Optional: Darf "Bitte nicht stören" umgehen
+      });
+    }
+
+    return true;
   },
 
-  /**
-   * Plant eine lokale Benachrichtigung nach einer Verzögerung.
-   * @param {number} seconds - Verzögerung in Sekunden.
-   */
-  async scheduleReminder(seconds) {
-    // Zuerst alle alten geplanten Erinnerungen löschen, um Spam zu vermeiden
-    await Notifications.cancelAllScheduledNotificationsAsync();
+  async scheduleReminder(seconds, title, body) {
+    try {
+      await Notifications.cancelAllScheduledNotificationsAsync();
 
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "Mixer vermisst dich! 🦄",
-        body: "Hey, kümmere dich um Mixer!",
-        sound: true,
-      },
-      trigger: { seconds: seconds },
-    });
-  },
-
-  /**
-   * Stoppt alle geplanten Benachrichtigungen (z.B. wenn User die App wieder öffnet).
-   */
-  async cancelReminders() {
-    await Notifications.cancelAllScheduledNotificationsAsync();
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `🦄 ${title}`, // Emoji im Titel fällt mehr auf
+          subtitle: "Mixer braucht Hilfe!", // Nur iOS
+          body: body,
+          sound: 'default',
+          priority: 'high', // Für Android < 8.0
+          color: '#FF69B4', // Farbe des Icons in der Statusleiste (Android)
+          badge: 1,
+          channelId: 'mixer-urgent', // Verweist auf den MAX-Importance Kanal
+          data: { screen: 'Game' }, // Daten für Deep-Linking
+        },
+        trigger: { 
+          type: 'timeInterval',
+          seconds: Math.round(seconds),
+          repeats: false 
+        },
+      });
+    } catch (error) {
+      console.error("Notification Error:", error);
+    }
   }
 };

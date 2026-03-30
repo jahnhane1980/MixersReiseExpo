@@ -1,4 +1,3 @@
-// App.js
 import React, { useState } from 'react';
 import { SafeAreaView, StyleSheet, View, Text } from 'react-native';
 
@@ -25,7 +24,14 @@ export default function App() {
   const engine = useGameEngine(showDialog);
 
   const handleSelectTool = (toolId) => {
-    if (engine.isSleeping) return; // Interaktion im Schlaf verhindern
+    if (engine.isSleeping) return; 
+    
+    // Tools nur freischalten, wenn ein Bedürfnis AKTIV ist und das Tool passt
+    if (engine.isNeedActive && toolId !== engine.activeNeed.toolId) {
+      showDialog("Mixer sagt:", "Das brauche ich gerade nicht!");
+      return;
+    }
+
     if (toolId === 5) {
       setQuestionVisible(true);
     } else {
@@ -34,22 +40,22 @@ export default function App() {
   };
 
   const handleDialogueSelection = (dialogueItem) => {
+    if (!engine.isNeedActive) return;
     setMixerSpeech(dialogueItem.answer);
-    engine.processInteraction(5, dialogueItem.points); 
+    engine.processInteraction(5); 
     setTimeout(() => setMixerSpeech(null), 4000);
   };
 
   const handleAction = () => {
-    if (engine.isSleeping) return; // Interaktion im Schlaf verhindern
-    if (!activeTool) {
-      showDialog("Hinweis", "Bitte wähle zuerst unten ein Tool aus!");
-      return;
-    }
+    if (engine.isSleeping || !activeTool) return;
     const result = engine.processInteraction(activeTool);
     
-    if (result.isAtHome) {
-      setMixerSpeech("Ich bin doch bei dir, du kannst dich direkt um mich kümmern");
-      setTimeout(() => setMixerSpeech(null), 4000);
+    if (result.success) {
+      setActiveTool(null);
+      if (result.isAtHome) {
+        setMixerSpeech("Ich bin doch bei dir, du kannst dich direkt um mich kümmern");
+        setTimeout(() => setMixerSpeech(null), 4000);
+      }
     }
   };
 
@@ -66,11 +72,17 @@ export default function App() {
         onApplyTool={handleAction} 
         activeTool={activeTool} 
         currentSpeech={mixerSpeech} 
+        activeNeed={engine.activeNeed} 
+        isNeedActive={engine.isNeedActive} 
       />
       
-      <BottomToolbar activeTool={activeTool} onSelectTool={handleSelectTool} />
+      <BottomToolbar 
+        activeTool={activeTool} 
+        onSelectTool={handleSelectTool} 
+        activeNeed={engine.activeNeed} 
+        isNeedActive={engine.isNeedActive} 
+      />
       
-      {/* NEU: NACHTRUHE OVERLAY */}
       {engine.isSleeping && (
         <View style={styles.nightLock}>
           <Text style={styles.nightText}>
@@ -79,7 +91,6 @@ export default function App() {
         </View>
       )}
 
-      {/* MODALS */}
       <QuestionModal visible={isQuestionVisible} onClose={() => setQuestionVisible(false)} onSelectQuestion={handleDialogueSelection} />
       <SettingsModal visible={isSettingsVisible} currentUserData={engine.userData} onClose={() => setSettingsVisible(false)} onSave={engine.setUserData} showDialog={showDialog} onReset={() => { engine.resetGame(); setSettingsVisible(false); showDialog("Reset", "Alles auf Null!"); }} />
       <DiscoveryModal visible={isInfoVisible} onClose={() => setInfoVisible(false)} logbookData={engine.logbook} />
@@ -90,7 +101,6 @@ export default function App() {
 
 const styles = StyleSheet.create({ 
   container: { flex: 1 },
-  // NEU: Styling für das Sperr-Overlay
   nightLock: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: Theme.colors.nightOverlay,

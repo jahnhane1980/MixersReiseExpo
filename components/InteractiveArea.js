@@ -12,7 +12,14 @@ const toolImages = {
   5: require('../assets/tool_talk.png'),
 };
 
-export default function InteractiveArea({ onApplyTool, rewardEvent, activeTool, currentSpeech }) {
+export default function InteractiveArea({ 
+  onApplyTool, 
+  rewardEvent, 
+  activeTool, 
+  currentSpeech, 
+  activeNeed, 
+  isNeedActive 
+}) {
   const [heartList, setHeartList] = useState([]);
   const prevEventId = useRef(rewardEvent?.id || 0);
 
@@ -34,7 +41,6 @@ export default function InteractiveArea({ onApplyTool, rewardEvent, activeTool, 
       resizeMode="cover" 
       imageStyle={{ transform: [{ scale: 1.3 }] }} 
     >
-      {/* Sprechblase */}
       {currentSpeech && (
         <View style={styles.speechBubble}>
           <Text style={styles.speechText}>{currentSpeech}</Text>
@@ -49,6 +55,15 @@ export default function InteractiveArea({ onApplyTool, rewardEvent, activeTool, 
           resizeMode="contain" 
         />
         
+        {/* FIX: overlay_drool erscheint NUR noch bei Tool 4 (Reinigung) */}
+        {isNeedActive && activeNeed?.toolId === 4 && (
+          <Image 
+            source={require('../assets/overlay_drool.png')} 
+            style={styles.statusOverlay} 
+            resizeMode="contain" 
+          />
+        )}
+
         <View style={styles.particleLayer}>
           {heartList.map((heart) => (
             <HeartParticle key={heart.id} id={heart.id} onComplete={(id) => setHeartList(prev => prev.filter(h => h.id !== id))} />
@@ -70,41 +85,13 @@ export default function InteractiveArea({ onApplyTool, rewardEvent, activeTool, 
 
 const styles = StyleSheet.create({
   mainArea: { flex: 1, alignItems: 'center', width: '100%', overflow: 'hidden' },
-  speechBubble: {
-    position: 'absolute',
-    top: 180,
-    backgroundColor: 'white',
-    padding: 15,
-    borderRadius: 20,
-    maxWidth: '80%',
-    borderWidth: 2,
-    borderColor: Theme.colors.primaryBrown,
-    zIndex: 20,
-    elevation: 5,
-  },
-  speechText: {
-    color: Theme.colors.primaryBrown,
-    fontSize: 16,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  bubbleTail: {
-    position: 'absolute',
-    bottom: -10,
-    left: '50%',
-    marginLeft: -10,
-    width: 0,
-    height: 0,
-    borderLeftWidth: 10,
-    borderRightWidth: 10,
-    borderTopWidth: 10,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: Theme.colors.primaryBrown,
-  },
+  speechBubble: { position: 'absolute', top: 180, backgroundColor: 'white', padding: 15, borderRadius: 20, maxWidth: '80%', borderWidth: 2, borderColor: Theme.colors.primaryBrown, zIndex: 20 },
+  speechText: { color: Theme.colors.primaryBrown, fontSize: 16, textAlign: 'center' },
+  bubbleTail: { position: 'absolute', bottom: -10, left: '50%', marginLeft: -10, width: 0, height: 0, borderLeftWidth: 10, borderRightWidth: 10, borderTopWidth: 10, borderTopColor: Theme.colors.primaryBrown, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
   plushieContainer: { marginTop: 320, position: 'relative' },
   plushieImage: { width: Theme.layout.plushieWidth, height: Theme.layout.plushieHeight },
-  particleLayer: { position: 'absolute', top: -50, left: 80, width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  draggableTool: { position: 'absolute', bottom: 10, left: '50%', marginLeft: -(Theme.layout.toolIconSize / 2), zIndex: 10 },
-  toolIcon: { width: Theme.layout.toolIconSize, height: Theme.layout.toolIconSize, resizeMode: 'contain' }
+  statusOverlay: { position: 'absolute', top: '20%', left: '15%', width: '70%', height: '60%', zIndex: 5 },
+  particleLayer: { position: 'absolute', top: -50, left: 80, width: 40, height: 40 },
+  draggableTool: { position: 'absolute', bottom: 10, left: '50%', marginLeft: -56, zIndex: 10 },
+  toolIcon: { width: 112, height: 112, resizeMode: 'contain' }
 });

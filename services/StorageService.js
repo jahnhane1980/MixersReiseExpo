@@ -8,16 +8,17 @@ export const StorageService = {
       const savedCount = await AsyncStorage.getItem('@punktestand');
       const savedLogbook = await AsyncStorage.getItem('@logbook');
       const savedUser = await AsyncStorage.getItem('@user_data');
+      const savedNeed = await AsyncStorage.getItem('@active_need');
 
       return {
         punktestand: savedCount ? parseInt(savedCount, 10) : 0,
         logbook: savedLogbook ? JSON.parse(savedLogbook) : [],
         userData: savedUser ? JSON.parse(savedUser) : null,
+        activeNeed: savedNeed ? JSON.parse(savedNeed) : null, // NEU
       };
     } catch (error) {
       if (Config.DEBUG_MODE) console.error("StorageService: Fehler beim Laden der Daten:", error);
-      // Fallback, damit die App nicht crasht
-      return { punktestand: 0, logbook: [], userData: null };
+      return { punktestand: 0, logbook: [], userData: null, activeNeed: null };
     }
   },
 
@@ -26,6 +27,19 @@ export const StorageService = {
       await AsyncStorage.setItem('@punktestand', count.toString());
     } catch (error) {
       if (Config.DEBUG_MODE) console.error("StorageService: Fehler beim Speichern des Punktestands:", error);
+    }
+  },
+
+  // NEU: Speichert das aktuelle Bedürfnis (Tool-ID und Timestamp)
+  async saveActiveNeed(need) {
+    try {
+      if (need) {
+        await AsyncStorage.setItem('@active_need', JSON.stringify(need));
+      } else {
+        await AsyncStorage.removeItem('@active_need');
+      }
+    } catch (error) {
+      if (Config.DEBUG_MODE) console.error("StorageService: Fehler beim Speichern des Bedarfs:", error);
     }
   },
 
@@ -49,7 +63,7 @@ export const StorageService = {
     try {
       await AsyncStorage.removeItem('@punktestand');
       await AsyncStorage.removeItem('@logbook');
-      // Die User-Adresse lassen wir absichtlich drin, nur das "Spiel" wird resettet
+      await AsyncStorage.removeItem('@active_need'); // NEU
     } catch (error) {
       if (Config.DEBUG_MODE) console.error("StorageService: Fehler beim Zurücksetzen der Daten:", error);
     }
