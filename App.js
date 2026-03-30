@@ -1,6 +1,5 @@
-// App.js
-import React, { useState, useEffect, useRef } from 'react';
-import { SafeAreaView, StyleSheet, View, Text, AppState } from 'react-native';
+import React, { useState } from 'react';
+import { SafeAreaView, StyleSheet, View, Text } from 'react-native';
 
 import TopBar from './components/TopBar';
 import BottomToolbar from './components/BottomToolbar';
@@ -12,7 +11,6 @@ import QuestionModal from './components/QuestionModal';
 
 import { Theme } from './constants/Theme';
 import { useGameEngine } from './hooks/useGameEngine';
-import { NotificationService } from './services/NotificationService'; // NEU
 
 export default function App() {
   const [activeTool, setActiveTool] = useState(null);
@@ -22,39 +20,12 @@ export default function App() {
   const [dialogConfig, setDialogConfig] = useState({ visible: false, title: '', message: '' });
   const [mixerSpeech, setMixerSpeech] = useState(null);
 
-  const appState = useRef(AppState.currentState); // NEU: App-Zustand tracken
   const showDialog = (title, message) => setDialogConfig({ visible: true, title, message });
   const engine = useGameEngine(showDialog);
 
-  // --- NEU: Notification & AppState Logik ---
-  useEffect(() => {
-    // Berechtigungen beim Start anfragen
-    NotificationService.requestPermissions();
-
-    const subscription = AppState.addEventListener('change', nextAppState => {
-      if (
-        appState.current === 'active' && 
-        nextAppState.match(/inactive|background/)
-      ) {
-        // App wird verlassen -> Timer für Notification starten (5 Sekunden)
-        NotificationService.scheduleReminder(5);
-      } else if (
-        appState.current.match(/inactive|background/) && 
-        nextAppState === 'active'
-      ) {
-        // App wird wieder geöffnet -> Timer löschen
-        NotificationService.cancelReminders();
-      }
-      appState.current = nextAppState;
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, []);
-
   const handleSelectTool = (toolId) => {
-    if (engine.isSleeping) return; 
+    if (engine.isSleeping) return; // Nacht-Sperre aktiv
+    
     if (toolId === 5) {
       setQuestionVisible(true);
     } else {
@@ -69,13 +40,20 @@ export default function App() {
   };
 
   const handleAction = () => {
-    if (engine.isSleeping) return; 
+    if (engine.isSleeping) return; // Nacht-Sperre aktiv
+    
     if (!activeTool) {
       showDialog("Hinweis", "Bitte wähle zuerst unten ein Tool aus!");
       return;
     }
+
     const result = engine.processInteraction(activeTool);
     
+    if (!result.success && !engine.isSleeping) {
+      showDialog("GPS", "Standort wird noch ermittelt...");
+      return;
+    }
+
     if (result.isAtHome) {
       setMixerSpeech("Ich bin doch bei dir, du kannst dich direkt um mich kümmern");
       setTimeout(() => setMixerSpeech(null), 4000);
@@ -99,6 +77,7 @@ export default function App() {
       
       <BottomToolbar activeTool={activeTool} onSelectTool={handleSelectTool} />
       
+      {/* NACHTRUHE OVERLAY */}
       {engine.isSleeping && (
         <View style={styles.nightLock}>
           <Text style={styles.nightText}>
@@ -107,10 +86,33 @@ export default function App() {
         </View>
       )}
 
-      <QuestionModal visible={isQuestionVisible} onClose={() => setQuestionVisible(false)} onSelectQuestion={handleDialogueSelection} />
-      <SettingsModal visible={isSettingsVisible} currentUserData={engine.userData} onClose={() => setSettingsVisible(false)} onSave={engine.setUserData} showDialog={showDialog} onReset={() => { engine.resetGame(); setSettingsVisible(false); showDialog("Reset", "Alles auf Null!"); }} />
+      <QuestionModal 
+        visible={isQuestionVisible} 
+        onClose={() => setQuestionVisible(false)} 
+        onSelectQuestion={handleDialogueSelection} 
+      />
+
+      <SettingsModal 
+        visible={isSettingsVisible} 
+        currentUserData={engine.userData} 
+        onClose={() => setSettingsVisible(false)} 
+        onSave={engine.setUserData} 
+        showDialog={showDialog} 
+        onReset={() => { 
+          engine.resetGame(); 
+          setSettingsVisible(false); 
+          showDialog("Reset", "Alles auf Null!"); 
+        }} 
+      />
+      
       <DiscoveryModal visible={isInfoVisible} onClose={() => setInfoVisible(false)} logbookData={engine.logbook} />
-      <InfoDialog visible={dialogConfig.visible} title={dialogConfig.title} message={dialogConfig.message} onClose={() => setDialogConfig({ ...dialogConfig, visible: false })} />
+      
+      <InfoDialog 
+        visible={dialogConfig.visible} 
+        title={dialogConfig.title} 
+        message={dialogConfig.message} 
+        onClose={() => setDialogConfig({ ...dialogConfig, visible: false })} 
+      />
     </SafeAreaView>
   );
 }
