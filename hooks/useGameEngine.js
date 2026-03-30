@@ -19,10 +19,8 @@ export function useGameEngine(showDialog) {
   const [activeNeed, setActiveNeed] = React.useState(null);
   const [forceRefresh, setForceRefresh] = React.useState(0); 
 
-  // Das Bedürfnis ist nur aktiv, wenn die aktuelle Zeit den Zeitstempel erreicht hat
   const isNeedActive = activeNeed && Date.now() >= activeNeed.timestamp;
 
-  // Effekt: Wartet auf den Zeitpunkt des Bedürfnisses und aktualisiert dann die UI
   React.useEffect(() => {
     if (activeNeed && !isNeedActive) {
       const delay = activeNeed.timestamp - Date.now();
@@ -33,12 +31,10 @@ export function useGameEngine(showDialog) {
     }
   }, [activeNeed, isNeedActive]);
 
-  // Berechnet einen Zeitpunkt, der garantiert in der Wachzeit liegt
   const calculateAwakeTrigger = React.useCallback((delayMs) => {
     const now = new Date();
     let triggerTime = new Date(now.getTime() + delayMs);
     const hour = triggerTime.getHours();
-
     const startNight = parseInt(Config.NIGHT_MODE_START.split(':')[0]);
     const endNight = parseInt(Config.NIGHT_MODE_END.split(':')[0]);
 
@@ -51,7 +47,6 @@ export function useGameEngine(showDialog) {
 
   const generateRandomNeed = React.useCallback(async (lastToolId = null) => {
     if (isSleeping) return;
-
     const toolIds = [1, 2, 3, 4, 5];
     let randomTool;
     do {
@@ -65,14 +60,7 @@ export function useGameEngine(showDialog) {
     setActiveNeed(newNeed);
     await StorageService.saveActiveNeed(newNeed);
 
-    const messages = {
-      1: "Ich habe riesigen Hunger! 🍎",
-      2: "Ich bin so durstig... 🥤",
-      3: "Magst du mich ein bisschen streicheln? ✋",
-      4: "Ich fühle mich ganz schmutzig. 🧼",
-      5: "Wollen wir ein bisschen quatschen? 💬"
-    };
-
+    const messages = { 1: "Hunger! 🍎", 2: "Durst! 🥤", 3: "Streichel mich! ✋", 4: "Dreckig! 🧼", 5: "Rede mit mir! 💬" };
     const secondsToTrigger = Math.max((triggerTime.getTime() - Date.now()) / 1000, 1);
     await NotificationService.scheduleReminder(secondsToTrigger, "Mixer braucht dich!", messages[randomTool]);
   }, [isSleeping, calculateAwakeTrigger]);
@@ -81,27 +69,23 @@ export function useGameEngine(showDialog) {
     const init = async () => {
       const data = await StorageService.loadGameData();
       setCount(data.punktestand);
-      setLogbook(data.logbook);
+      setLogbook(data.logbook || []);
       setActiveNeed(data.activeNeed);
-      
       if (data.userData) setUserData(data.userData);
 
       const locResult = await LocationService.getCurrentLocationData();
       if (locResult.success) {
         setCurrentLocation({ city: locResult.city, lat: locResult.lat, lon: locResult.lon });
         const timeData = await TimeService.getLocalTime(locResult.lat, locResult.lon);
-        const sleeping = TimeService.isMixerSleeping(timeData.hour);
-        setIsSleeping(sleeping);
-
-        if (!data.activeNeed && !sleeping) {
-          generateRandomNeed();
-        }
+        setIsSleeping(TimeService.isMixerSleeping(timeData.hour));
+        if (!data.activeNeed && !TimeService.isMixerSleeping(timeData.hour)) generateRandomNeed();
       }
       setIsAppReady(true);
     };
     init();
   }, [generateRandomNeed]);
 
+  // WICHTIG: Sync mit Logbuch
   React.useEffect(() => {
     if (isAppReady) {
       StorageService.savePunktestand(count);
@@ -110,36 +94,37 @@ export function useGameEngine(showDialog) {
   }, [count, logbook, isAppReady]);
 
   const processInteraction = (activeTool) => {
-    if (currentLocation.city === 'Unbekannt' || isSleeping || !isNeedActive) return { success: false };
-    if (activeTool !== activeNeed.toolId) return { success: false };
+    if (!isNeedActive || activeTool !== activeNeed.toolId) return { success: false };
 
     const distance = getDistanceFromLatLonInKm(userData.lat, userData.lon, currentLocation.lat, currentLocation.lon);
     const result = calculateEarnedHearts(activeTool, distance, GameRules.TOOL_BASE_POINTS, GameRules.DISTANCE_THRESHOLDS, activeNeed);
     
-    if (result.isPenalty) {
-      showDialog("Zu spät!", "Du hast zu lange gewartet. Zur Strafe verliere ich Herzen.");
-    }
+    const earned = result.earnedHearts;
+    setCount(prev => prev + earned);
+    setRewardEvent({ id: Date.now(), amount: earned });
 
-    setCount(prev => prev + result.earnedHearts);
-    setRewardEvent({ id: Date.now(), amount: result.earnedHearts });
+    // LOGBUCH AKTUALISIERUNG
+    setLogbook(prev => {
+      const idx = prev.findIndex(e => e.city === currentLocation.city);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], count: next[idx].count + earned };
+        return next;
+      }
+      return [...prev, { id: Date.now().toString(), city: currentLocation.city, count: earned }];
+    });
 
-    const currentToolId = activeNeed?.toolId;
+    const lastId = activeNeed.toolId;
     setActiveNeed(null);
     StorageService.saveActiveNeed(null);
-    generateRandomNeed(currentToolId);
+    generateRandomNeed(lastId);
 
     return { success: true, isAtHome: result.isAtHome };
   };
 
-  const resetGame = async () => {
-    setCount(0);
-    setLogbook([]);
-    setActiveNeed(null);
-    await StorageService.saveActiveNeed(null);
-    await StorageService.resetGameData();
-  };
-
   return {
-    count, logbook, userData, setUserData, currentLocation, rewardEvent, isAppReady, processInteraction, resetGame, isSleeping, activeNeed, isNeedActive
+    count, logbook, userData, setUserData, currentLocation, rewardEvent, isAppReady, processInteraction, 
+    resetGame: async () => { setCount(0); setLogbook([]); setActiveNeed(null); await StorageService.saveActiveNeed(null); await StorageService.resetGameData(); }, 
+    isSleeping, activeNeed, isNeedActive
   };
 }

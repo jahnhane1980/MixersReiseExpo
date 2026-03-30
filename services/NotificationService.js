@@ -5,60 +5,58 @@ Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
-    shouldSetBadge: true, // Badge am App-Icon zeigen
+    shouldSetBadge: true,
   }),
 });
 
 export const NotificationService = {
+  /**
+   * Fordert Berechtigungen an und konfiguriert den Android-Kanal.
+   */
   async requestPermissions() {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') return false;
 
-    if (finalStatus !== 'granted') return false;
-
-    // KANAL-OPTIMIERUNG FÜR MAXIMALE AUFMERKSAMKEIT
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('mixer-urgent', {
         name: 'Mixer Wichtige Meldungen',
-        importance: Notifications.AndroidImportance.MAX, // ERZWINGT HEADS-UP
-        vibrationPattern: [0, 250, 250, 250, 500, 250], // Markantes Muster
-        lightColor: '#FF231F7C',
-        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-        bypassDnd: true, // Optional: Darf "Bitte nicht stören" umgehen
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
       });
     }
-
     return true;
   },
 
+  /**
+   * Plant eine Benachrichtigung mit erzwungenem Zeilenumbruch.
+   */
   async scheduleReminder(seconds, title, body) {
     try {
       await Notifications.cancelAllScheduledNotificationsAsync();
 
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: `🦄 ${title}`, // Emoji im Titel fällt mehr auf
-          subtitle: "Mixer braucht Hilfe!", // Nur iOS
-          body: body,
+          title: `🦄 ${title}`,
+          // Untertitel für iOS (eigene Zeile)
+          subtitle: "Aktion erforderlich!", 
+          // Haupttext mit zwei Umbrüchen für bessere Sichtbarkeit auf Android
+          body: `${body}\n\n🚀 TIPP: App manuell öffnen!`,
           sound: 'default',
-          priority: 'high', // Für Android < 8.0
-          color: '#FF69B4', // Farbe des Icons in der Statusleiste (Android)
-          badge: 1,
-          channelId: 'mixer-urgent', // Verweist auf den MAX-Importance Kanal
-          data: { screen: 'Game' }, // Daten für Deep-Linking
+          priority: 'high',
+          channelId: 'mixer-urgent',
         },
         trigger: { 
           type: 'timeInterval',
-          seconds: Math.round(seconds),
+          seconds: Math.max(Math.round(seconds), 1),
           repeats: false 
         },
       });
     } catch (error) {
-      console.error("Notification Error:", error);
+      console.error("NotificationService Error:", error);
     }
+  },
+
+  async cancelReminders() {
+    await Notifications.cancelAllScheduledNotificationsAsync();
   }
 };

@@ -14,7 +14,7 @@ export const Config = {
     MIN_MULTIPLIER: 0.2,               
     
     // Intervalle für den produktiven Betrieb
-    NEXT_NEED_DELAY_MIN: 1 * 60 * 60 * 1000, // 1 Std.
-    NEXT_NEED_DELAY_MAX: 5 * 60 * 60 * 1000  // 5 Std.
+    NEXT_NEED_DELAY_MIN: 5000, //1 * 60 * 60 * 1000, // 1 Std.
+    NEXT_NEED_DELAY_MAX: 5000 //5 * 60 * 60 * 1000  // 5 Std.
   }
 };
