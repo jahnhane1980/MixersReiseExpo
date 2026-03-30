@@ -14,6 +14,7 @@ export function useGameEngine(showDialog) {
   const [rewardEvent, setRewardEvent] = useState({ id: 0, amount: 0 });
   const [isAppReady, setIsAppReady] = useState(false);
 
+  // Initialisierung beim Start
   useEffect(() => {
     const init = async () => {
       let currentUserName = Config.DEFAULT_USERNAME;
@@ -46,6 +47,7 @@ export function useGameEngine(showDialog) {
     init();
   }, []);
 
+  // Speicher-Sync
   useEffect(() => {
     if (isAppReady) {
       StorageService.savePunktestand(count);
@@ -53,29 +55,38 @@ export function useGameEngine(showDialog) {
     }
   }, [count, logbook, isAppReady]);
 
+  /**
+   * Verarbeitet Interaktionen.
+   * manualPoints wird für Dialoge genutzt, ansonsten greift die Geo-Logik.
+   */
   const processInteraction = (activeTool, manualPoints = null) => {
-    if (currentLocation.city === 'Unbekannt') return false;
+    if (currentLocation.city === 'Unbekannt') return { success: false };
 
     let earnedHearts = 0;
     let multiplier = 1;
+    let isAtHome = false;
 
-    // NEU: Unterscheidung zwischen manuellem Wert (Dialog) und Distanz-Logik
     if (manualPoints !== null) {
+      // Direkte Punktevergabe für Dialoge
       earnedHearts = manualPoints;
     } else {
+      // Standard Geo-Logik mit Anti-Cheat (Radius < 50m)
       const distance = getDistanceFromLatLonInKm(userData.lat, userData.lon, currentLocation.lat, currentLocation.lon);
       const result = calculateEarnedHearts(activeTool, distance, GameRules.TOOL_BASE_POINTS, GameRules.DISTANCE_THRESHOLDS);
+      
       earnedHearts = result.earnedHearts;
       multiplier = result.multiplier;
+      isAtHome = result.isAtHome;
     }
 
     setCount(prev => prev + earnedHearts);
     setRewardEvent({ id: Date.now(), amount: earnedHearts });
 
-    const isHome = userData.address?.toLowerCase().includes(currentLocation.city.toLowerCase());
+    // Logbuch Logik
+    const isHomeCity = userData.address?.toLowerCase().includes(currentLocation.city.toLowerCase());
     const isNewCity = !logbook.some(e => e.city === currentLocation.city);
 
-    if (isNewCity && !isHome && manualPoints === null) {
+    if (isNewCity && !isHomeCity && manualPoints === null && !isAtHome) {
       showDialog("Neue Stadt!", multiplier > 1 ? `x${multiplier} Herzen in ${currentLocation.city}!` : `Willkommen in ${currentLocation.city}!`);
     }
 
@@ -88,7 +99,8 @@ export function useGameEngine(showDialog) {
       }
       return [...prev, { id: Date.now().toString(), city: currentLocation.city, count: earnedHearts }];
     });
-    return true;
+
+    return { success: true, isAtHome };
   };
 
   const resetGame = async () => {

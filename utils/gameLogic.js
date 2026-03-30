@@ -1,15 +1,20 @@
 /**
  * Berechnet die verdienten Herzen basierend auf dem Werkzeug und der Distanz.
- * @param {number} activeTool - Die ID des gewählten Werkzeugs
- * @param {number} distance - Die berechnete Distanz zum Heimatort
- * @param {object} basePointsMap - Die TOOL_BASE_POINTS aus GameRules
- * @param {array} thresholds - Die DISTANCE_THRESHOLDS aus GameRules
- * @returns {object} Ein Objekt mit earnedHearts und dem angewendeten multiplier
+ * Inklusive Anti-Cheat: Distanzen < 50m (0.05km) geben nur 0.5x Punkte.
  */
 export const calculateEarnedHearts = (activeTool, distance, basePointsMap, thresholds) => {
   const basePoints = basePointsMap[activeTool] || 0;
+  
+  // Anti-Cheat: Wenn zu nah am Heimatort (< 50m)
+  if (distance < 0.05) {
+    return {
+      earnedHearts: Math.floor(basePoints * 0.5),
+      multiplier: 0.5,
+      isAtHome: true
+    };
+  }
 
-  // Suche den passenden Multiplikator (erstes Match in der sortierten Liste)
+  // Suche den passenden Multiplikator (Standard-Logik)
   let multiplier = 1;
   const thresholdMatch = thresholds.find(t => distance >= t.minKm);
   if (thresholdMatch) {
@@ -18,6 +23,7 @@ export const calculateEarnedHearts = (activeTool, distance, basePointsMap, thres
 
   return {
     earnedHearts: basePoints * multiplier,
-    multiplier
+    multiplier,
+    isAtHome: false
   };
 };

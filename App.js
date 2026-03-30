@@ -18,28 +18,27 @@ export default function App() {
   const [isInfoVisible, setInfoVisible] = useState(false);
   const [isQuestionVisible, setQuestionVisible] = useState(false); // NEU
   const [dialogConfig, setDialogConfig] = useState({ visible: false, title: '', message: '' });
-  const [mixerSpeech, setMixerSpeech] = useState(null); // NEU: Steuert den Text in InteractiveArea
+  const [mixerSpeech, setMixerSpeech] = useState(null); // NEU: Steuert die Sprechblase
 
   const showDialog = (title, message) => setDialogConfig({ visible: true, title, message });
 
   const engine = useGameEngine(showDialog);
 
-  // Angepasster Handler für die Tool-Auswahl
+  // Steuerung der Toolbar-Icons
   const handleSelectTool = (toolId) => {
     if (toolId === 5) {
-      // Wenn Sprechblase gewählt wird: Modal öffnen
       setQuestionVisible(true);
     } else {
       setActiveTool(toolId);
     }
   };
 
-  // Logik für die Dialog-Antwort
+  // Verarbeitung der Dialog-Auswahl
   const handleDialogueSelection = (dialogueItem) => {
     setMixerSpeech(dialogueItem.answer);
-    engine.processInteraction(5, dialogueItem.points); // Punkte direkt vergeben
+    engine.processInteraction(5, dialogueItem.points); 
     
-    // Nach 4 Sekunden verschwindet die Sprechblase automatisch
+    // Sprechblase nach 4 Sekunden ausblenden
     setTimeout(() => {
       setMixerSpeech(null);
     }, 4000);
@@ -50,8 +49,21 @@ export default function App() {
       showDialog("Hinweis", "Bitte wähle zuerst unten ein Tool aus!");
       return;
     }
-    const success = engine.processInteraction(activeTool);
-    if (!success) showDialog("GPS", "Standort wird noch ermittelt...");
+
+    const result = engine.processInteraction(activeTool);
+    
+    if (!result.success) {
+      showDialog("GPS", "Standort wird noch ermittelt...");
+      return;
+    }
+
+    // Anti-Cheat: Feedback via Sprechblase, wenn zu Hause (< 50m)
+    if (result.isAtHome) {
+      setMixerSpeech("Ich bin doch bei dir, du kannst dich direkt um mich kümmern");
+      setTimeout(() => {
+        setMixerSpeech(null);
+      }, 4000);
+    }
   };
 
   return (
@@ -66,7 +78,7 @@ export default function App() {
         rewardEvent={engine.rewardEvent} 
         onApplyTool={handleAction} 
         activeTool={activeTool} 
-        currentSpeech={mixerSpeech} // NEU
+        currentSpeech={mixerSpeech} // NEU: Text an InteractiveArea übergeben
       />
       
       <BottomToolbar activeTool={activeTool} onSelectTool={handleSelectTool} />
