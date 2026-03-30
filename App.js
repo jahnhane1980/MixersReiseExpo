@@ -1,6 +1,6 @@
 // App.js
-import React, { useState } from 'react';
-import { SafeAreaView, StyleSheet, View, Text } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { SafeAreaView, StyleSheet, View, Text, AppState } from 'react-native';
 
 import TopBar from './components/TopBar';
 import BottomToolbar from './components/BottomToolbar';
@@ -12,6 +12,7 @@ import QuestionModal from './components/QuestionModal';
 
 import { Theme } from './constants/Theme';
 import { useGameEngine } from './hooks/useGameEngine';
+import { NotificationService } from './services/NotificationService'; // NEU
 
 export default function App() {
   const [activeTool, setActiveTool] = useState(null);
@@ -21,11 +22,39 @@ export default function App() {
   const [dialogConfig, setDialogConfig] = useState({ visible: false, title: '', message: '' });
   const [mixerSpeech, setMixerSpeech] = useState(null);
 
+  const appState = useRef(AppState.currentState); // NEU: App-Zustand tracken
   const showDialog = (title, message) => setDialogConfig({ visible: true, title, message });
   const engine = useGameEngine(showDialog);
 
+  // --- NEU: Notification & AppState Logik ---
+  useEffect(() => {
+    // Berechtigungen beim Start anfragen
+    NotificationService.requestPermissions();
+
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (
+        appState.current === 'active' && 
+        nextAppState.match(/inactive|background/)
+      ) {
+        // App wird verlassen -> Timer für Notification starten (5 Sekunden)
+        NotificationService.scheduleReminder(5);
+      } else if (
+        appState.current.match(/inactive|background/) && 
+        nextAppState === 'active'
+      ) {
+        // App wird wieder geöffnet -> Timer löschen
+        NotificationService.cancelReminders();
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   const handleSelectTool = (toolId) => {
-    if (engine.isSleeping) return; // Interaktion im Schlaf verhindern
+    if (engine.isSleeping) return; 
     if (toolId === 5) {
       setQuestionVisible(true);
     } else {
@@ -40,7 +69,7 @@ export default function App() {
   };
 
   const handleAction = () => {
-    if (engine.isSleeping) return; // Interaktion im Schlaf verhindern
+    if (engine.isSleeping) return; 
     if (!activeTool) {
       showDialog("Hinweis", "Bitte wähle zuerst unten ein Tool aus!");
       return;
@@ -70,7 +99,6 @@ export default function App() {
       
       <BottomToolbar activeTool={activeTool} onSelectTool={handleSelectTool} />
       
-      {/* NEU: NACHTRUHE OVERLAY */}
       {engine.isSleeping && (
         <View style={styles.nightLock}>
           <Text style={styles.nightText}>
@@ -79,7 +107,6 @@ export default function App() {
         </View>
       )}
 
-      {/* MODALS */}
       <QuestionModal visible={isQuestionVisible} onClose={() => setQuestionVisible(false)} onSelectQuestion={handleDialogueSelection} />
       <SettingsModal visible={isSettingsVisible} currentUserData={engine.userData} onClose={() => setSettingsVisible(false)} onSave={engine.setUserData} showDialog={showDialog} onReset={() => { engine.resetGame(); setSettingsVisible(false); showDialog("Reset", "Alles auf Null!"); }} />
       <DiscoveryModal visible={isInfoVisible} onClose={() => setInfoVisible(false)} logbookData={engine.logbook} />
@@ -90,7 +117,6 @@ export default function App() {
 
 const styles = StyleSheet.create({ 
   container: { flex: 1 },
-  // NEU: Styling für das Sperr-Overlay
   nightLock: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: Theme.colors.nightOverlay,
