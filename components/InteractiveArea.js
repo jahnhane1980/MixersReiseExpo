@@ -34,7 +34,7 @@ export default function InteractiveArea({ onApplyTool, rewardEvent, activeTool, 
       resizeMode="cover" 
       imageStyle={{ transform: [{ scale: 1.3 }] }} 
     >
-      {/* NEU: Die Sprechblase */}
+      {/* Sprechblase */}
       {currentSpeech && (
         <View style={styles.speechBubble}>
           <Text style={styles.speechText}>{currentSpeech}</Text>
