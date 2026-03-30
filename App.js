@@ -7,20 +7,43 @@ import InteractiveArea from './components/InteractiveArea';
 import SettingsModal from './components/SettingsModal';
 import DiscoveryModal from './components/DiscoveryModal';
 import InfoDialog from './components/InfoDialog'; 
+import QuestionModal from './components/QuestionModal'; // NEU
 
 import { Theme } from './constants/Theme';
-import { useGameEngine } from './hooks/useGameEngine'; // NEU
+import { useGameEngine } from './hooks/useGameEngine';
 
 export default function App() {
   const [activeTool, setActiveTool] = useState(null);
   const [isSettingsVisible, setSettingsVisible] = useState(false);
   const [isInfoVisible, setInfoVisible] = useState(false);
+  const [isQuestionVisible, setQuestionVisible] = useState(false); // NEU
   const [dialogConfig, setDialogConfig] = useState({ visible: false, title: '', message: '' });
+  const [mixerSpeech, setMixerSpeech] = useState(null); // NEU: Steuert den Text in InteractiveArea
 
   const showDialog = (title, message) => setDialogConfig({ visible: true, title, message });
 
-  // Die Engine nutzen
   const engine = useGameEngine(showDialog);
+
+  // Angepasster Handler für die Tool-Auswahl
+  const handleSelectTool = (toolId) => {
+    if (toolId === 5) {
+      // Wenn Sprechblase gewählt wird: Modal öffnen
+      setQuestionVisible(true);
+    } else {
+      setActiveTool(toolId);
+    }
+  };
+
+  // Logik für die Dialog-Antwort
+  const handleDialogueSelection = (dialogueItem) => {
+    setMixerSpeech(dialogueItem.answer);
+    engine.processInteraction(5, dialogueItem.points); // Punkte direkt vergeben
+    
+    // Nach 4 Sekunden verschwindet die Sprechblase automatisch
+    setTimeout(() => {
+      setMixerSpeech(null);
+    }, 4000);
+  };
 
   const handleAction = () => {
     if (!activeTool) {
@@ -43,9 +66,10 @@ export default function App() {
         rewardEvent={engine.rewardEvent} 
         onApplyTool={handleAction} 
         activeTool={activeTool} 
+        currentSpeech={mixerSpeech} // NEU
       />
       
-      <BottomToolbar activeTool={activeTool} onSelectTool={setActiveTool} />
+      <BottomToolbar activeTool={activeTool} onSelectTool={handleSelectTool} />
       
       <SettingsModal 
         visible={isSettingsVisible} 
@@ -58,6 +82,12 @@ export default function App() {
       
       <DiscoveryModal visible={isInfoVisible} onClose={() => setInfoVisible(false)} logbookData={engine.logbook} />
       
+      <QuestionModal 
+        visible={isQuestionVisible} 
+        onClose={() => setQuestionVisible(false)} 
+        onSelectQuestion={handleDialogueSelection} 
+      />
+
       <InfoDialog 
         visible={dialogConfig.visible} 
         title={dialogConfig.title} 

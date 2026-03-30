@@ -14,7 +14,6 @@ export function useGameEngine(showDialog) {
   const [rewardEvent, setRewardEvent] = useState({ id: 0, amount: 0 });
   const [isAppReady, setIsAppReady] = useState(false);
 
-  // Initialisierung beim Start
   useEffect(() => {
     const init = async () => {
       let currentUserName = Config.DEFAULT_USERNAME;
@@ -47,7 +46,6 @@ export function useGameEngine(showDialog) {
     init();
   }, []);
 
-  // Speicher-Sync
   useEffect(() => {
     if (isAppReady) {
       StorageService.savePunktestand(count);
@@ -55,20 +53,29 @@ export function useGameEngine(showDialog) {
     }
   }, [count, logbook, isAppReady]);
 
-  const processInteraction = (activeTool) => {
+  const processInteraction = (activeTool, manualPoints = null) => {
     if (currentLocation.city === 'Unbekannt') return false;
 
-    const distance = getDistanceFromLatLonInKm(userData.lat, userData.lon, currentLocation.lat, currentLocation.lon);
-    const { earnedHearts, multiplier } = calculateEarnedHearts(activeTool, distance, GameRules.TOOL_BASE_POINTS, GameRules.DISTANCE_THRESHOLDS);
+    let earnedHearts = 0;
+    let multiplier = 1;
+
+    // NEU: Unterscheidung zwischen manuellem Wert (Dialog) und Distanz-Logik
+    if (manualPoints !== null) {
+      earnedHearts = manualPoints;
+    } else {
+      const distance = getDistanceFromLatLonInKm(userData.lat, userData.lon, currentLocation.lat, currentLocation.lon);
+      const result = calculateEarnedHearts(activeTool, distance, GameRules.TOOL_BASE_POINTS, GameRules.DISTANCE_THRESHOLDS);
+      earnedHearts = result.earnedHearts;
+      multiplier = result.multiplier;
+    }
 
     setCount(prev => prev + earnedHearts);
     setRewardEvent({ id: Date.now(), amount: earnedHearts });
 
-    // Logbuch Logik
     const isHome = userData.address?.toLowerCase().includes(currentLocation.city.toLowerCase());
     const isNewCity = !logbook.some(e => e.city === currentLocation.city);
 
-    if (isNewCity && !isHome) {
+    if (isNewCity && !isHome && manualPoints === null) {
       showDialog("Neue Stadt!", multiplier > 1 ? `x${multiplier} Herzen in ${currentLocation.city}!` : `Willkommen in ${currentLocation.city}!`);
     }
 

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { StyleSheet, ImageBackground, Image, View, Animated } from 'react-native';
+import { StyleSheet, ImageBackground, Image, View, Animated, Text } from 'react-native';
 import { Theme } from '../constants/Theme';
 import { usePlushieAnimation } from '../hooks/usePlushieAnimation';
 import HeartParticle from './HeartParticle';
@@ -12,14 +12,13 @@ const toolImages = {
   5: require('../assets/tool_talk.png'),
 };
 
-export default function InteractiveArea({ onApplyTool, rewardEvent, activeTool }) {
+export default function InteractiveArea({ onApplyTool, rewardEvent, activeTool, currentSpeech }) {
   const [heartList, setHeartList] = useState([]);
   const prevEventId = useRef(rewardEvent?.id || 0);
 
   const { panHandlers, pan, snapScale, plushieScale, plushieOpacity } = usePlushieAnimation(onApplyTool);
 
   useEffect(() => {
-    // Wenn ein neues Reward-Event reinkommt, spawne Herzen
     if (rewardEvent && rewardEvent.id !== prevEventId.current && rewardEvent.amount > 0) {
       const spawnCount = Math.min(rewardEvent.amount, 30);
       const heartsToAdd = Array.from({ length: spawnCount }).map((_, i) => ({ id: `${rewardEvent.id}-${i}` }));
@@ -35,6 +34,14 @@ export default function InteractiveArea({ onApplyTool, rewardEvent, activeTool }
       resizeMode="cover" 
       imageStyle={{ transform: [{ scale: 1.3 }] }} 
     >
+      {/* NEU: Die Sprechblase */}
+      {currentSpeech && (
+        <View style={styles.speechBubble}>
+          <Text style={styles.speechText}>{currentSpeech}</Text>
+          <View style={styles.bubbleTail} />
+        </View>
+      )}
+
       <View style={styles.plushieContainer}>
         <Animated.Image 
           source={require('../assets/mixer_idle.png')} 
@@ -63,6 +70,38 @@ export default function InteractiveArea({ onApplyTool, rewardEvent, activeTool }
 
 const styles = StyleSheet.create({
   mainArea: { flex: 1, alignItems: 'center', width: '100%', overflow: 'hidden' },
+  speechBubble: {
+    position: 'absolute',
+    top: 180,
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 20,
+    maxWidth: '80%',
+    borderWidth: 2,
+    borderColor: Theme.colors.primaryBrown,
+    zIndex: 20,
+    elevation: 5,
+  },
+  speechText: {
+    color: Theme.colors.primaryBrown,
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  bubbleTail: {
+    position: 'absolute',
+    bottom: -10,
+    left: '50%',
+    marginLeft: -10,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 10,
+    borderRightWidth: 10,
+    borderTopWidth: 10,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: Theme.colors.primaryBrown,
+  },
   plushieContainer: { marginTop: 320, position: 'relative' },
   plushieImage: { width: Theme.layout.plushieWidth, height: Theme.layout.plushieHeight },
   particleLayer: { position: 'absolute', top: -50, left: 80, width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
