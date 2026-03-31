@@ -5,18 +5,9 @@ import {
 } from 'react-native';
 import { Theme } from '../constants/Theme';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function DiscoveryModal({ visible, onClose, logbookData }) {
-  // TEST-DATEN: 20 Einträge zum Scroll-Check
-  const testData = Array.from({ length: 20 }, (_, i) => ({
-    id: `test-${i}`,
-    city: 'Chicago',
-    count: 0
-  }));
-
-  const displayData = [...(logbookData || []), ...testData];
-
   const renderItem = ({ item }) => (
     <View style={styles.logEntry}>
       <Text style={styles.cityText}>📍 {item.city}</Text>
@@ -42,7 +33,7 @@ export default function DiscoveryModal({ visible, onClose, logbookData }) {
             </View>
             
             <FlatList
-              data={displayData}
+              data={logbookData || []}
               renderItem={renderItem}
               keyExtractor={item => item.id}
               style={styles.scrollArea}
@@ -117,7 +108,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.75)', // Noch weißer für Kontrast zur Karte
+    backgroundColor: 'rgba(255, 255, 255, 0.75)', // Kontrast zur Karte
     paddingVertical: 20,
     paddingHorizontal: 20,
     borderRadius: 15,
@@ -145,10 +136,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingBottom: 35, // Etwas mehr Platz nach unten
+    paddingBottom: 35, 
     paddingTop: 15,
     alignItems: 'center',
-    // HOHE DECKKRAFT FÜR DAS GOLD-FINISH
     backgroundColor: 'rgba(255, 247, 212, 0.85)', 
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.1)',
