@@ -1,9 +1,22 @@
 import React from 'react';
-import { StyleSheet, View, Text, Modal, TouchableOpacity, FlatList } from 'react-native';
+import { 
+  StyleSheet, View, Text, Modal, TouchableOpacity, 
+  FlatList, ImageBackground, Dimensions 
+} from 'react-native';
 import { Theme } from '../constants/Theme';
 
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
 export default function DiscoveryModal({ visible, onClose, logbookData }) {
-  // Eine Zeile im Logbuch rendern
+  // TEST-DATEN: 20 Einträge zum Scroll-Check
+  const testData = Array.from({ length: 20 }, (_, i) => ({
+    id: `test-${i}`,
+    city: 'Chicago',
+    count: 0
+  }));
+
+  const displayData = [...(logbookData || []), ...testData];
+
   const renderItem = ({ item }) => (
     <View style={styles.logEntry}>
       <Text style={styles.cityText}>📍 {item.city}</Text>
@@ -12,28 +25,39 @@ export default function DiscoveryModal({ visible, onClose, logbookData }) {
   );
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={true}>
+    <Modal visible={visible} animationType="fade" transparent={true}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Entdecker-Logbuch</Text>
           
-          {logbookData && logbookData.length > 0 ? (
+          {/* HINTERGRUND: DIE WELTKARTE */}
+          <ImageBackground 
+            source={require('../assets/bg_world_map.png')} 
+            style={styles.backgroundImage}
+            resizeMode="cover"
+          >
+            {/* STICKY HEADER (Fester Titel) */}
+            <View style={styles.header}>
+              <Text style={styles.modalTitle}>Entdecker-Logbuch</Text>
+              <View style={styles.titleLine} />
+            </View>
+            
             <FlatList
-              data={logbookData}
+              data={displayData}
               renderItem={renderItem}
               keyExtractor={item => item.id}
-              style={styles.listStyle}
+              style={styles.scrollArea}
               contentContainerStyle={styles.listContainer}
+              showsVerticalScrollIndicator={true}
             />
-          ) : (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>Noch keine Entdeckungen gemacht...</Text>
-            </View>
-          )}
 
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Text style={styles.closeButtonText}>Schließen</Text>
-          </TouchableOpacity>
+            {/* STICKY FOOTER (Fester Button mit hoher Deckkraft) */}
+            <View style={styles.footer}>
+              <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+                <Text style={styles.closeButtonText}>Abenteuer fortsetzen</Text>
+              </TouchableOpacity>
+            </View>
+          </ImageBackground>
+
         </View>
       </View>
     </Modal>
@@ -43,68 +67,103 @@ export default function DiscoveryModal({ visible, onClose, logbookData }) {
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.8)', 
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    width: '85%',
-    height: '70%', // Feste Höhe, damit die Liste scrollen muss
-    backgroundColor: Theme.colors.modalYellow,
-    borderRadius: 20,
-    padding: 20,
-    alignItems: 'center',
+    width: '95%',
+    height: '92%',
+    borderRadius: 25,
+    overflow: 'hidden',
     borderWidth: 3,
     borderColor: Theme.colors.primaryBrown,
+    backgroundColor: '#fff', 
+  },
+  backgroundImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  header: {
+    backgroundColor: 'rgba(255, 247, 212, 0.9)', // Passendes Gelb-Overlay oben
+    paddingTop: 30,
+    paddingBottom: 20,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: Theme.colors.primaryBrown,
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: 28,
     fontWeight: 'bold',
     color: Theme.colors.primaryBrown,
-    marginBottom: 20,
+    letterSpacing: 1,
   },
-  listStyle: {
-    width: '100%',
+  titleLine: {
+    height: 4,
+    backgroundColor: Theme.colors.primaryBrown,
+    width: 80,
+    marginTop: 6,
+    borderRadius: 2,
+  },
+  scrollArea: {
+    flex: 1,
   },
   listContainer: {
-    paddingBottom: 20,
+    padding: 20,
+    paddingBottom: 130, // Puffer für den massiveren Footer-Bereich
   },
   logEntry: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.5)',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 8,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.75)', // Noch weißer für Kontrast zur Karte
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    borderRadius: 15,
+    marginBottom: 15,
     borderWidth: 1,
-    borderColor: Theme.colors.toolbarBorder,
+    borderColor: '#ddd',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
   },
   cityText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Theme.colors.primaryBrown,
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2c3e50',
   },
   pointsText: {
-    fontSize: 16,
+    fontSize: 20,
+    fontWeight: '900',
     color: Theme.colors.primaryBrown,
   },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  emptyText: {
-    fontStyle: 'italic',
-    color: 'gray',
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingBottom: 35, // Etwas mehr Platz nach unten
+    paddingTop: 15,
+    alignItems: 'center',
+    // HOHE DECKKRAFT FÜR DAS GOLD-FINISH
+    backgroundColor: 'rgba(255, 247, 212, 0.85)', 
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.1)',
   },
   closeButton: {
-    marginTop: 20,
     backgroundColor: Theme.colors.primaryBrown,
-    paddingVertical: 10,
-    paddingHorizontal: 30,
-    borderRadius: 25,
+    paddingVertical: 15,
+    paddingHorizontal: 50,
+    borderRadius: 35,
+    elevation: 8,
   },
   closeButtonText: {
     color: 'white',
+    fontSize: 18,
     fontWeight: 'bold',
+    textTransform: 'uppercase',
   },
 });
