@@ -18,7 +18,8 @@ export default function InteractiveArea({
   activeTool, 
   currentSpeech, 
   activeNeed, 
-  isNeedActive 
+  isNeedActive,
+  isSleeping // Neu: Prop empfangen
 }) {
   const [heartList, setHeartList] = useState([]);
   const prevEventId = useRef(rewardEvent?.id || 0);
@@ -33,6 +34,17 @@ export default function InteractiveArea({
       prevEventId.current = rewardEvent.id;
     }
   }, [rewardEvent]);
+
+  // Bild-Priorität: 
+  // 1. Schlafen (Nachtmodus) 
+  // 2. Schmutzig (Bedarf Tool 4 aktiv)
+  // 3. Normal (Idle)
+  //
+  const characterSource = isSleeping 
+    ? require('../assets/mixer_sleeping.png')
+    : (isNeedActive && activeNeed?.toolId === 4)
+      ? require('../assets/mixer_dirty.png') 
+      : require('../assets/mixer_idle.png');
 
   return (
     <ImageBackground 
@@ -50,19 +62,12 @@ export default function InteractiveArea({
 
       <View style={styles.plushieContainer}>
         <Animated.Image 
-          source={require('../assets/mixer_idle.png')} 
+          source={characterSource} 
           style={[styles.plushieImage, { transform: [{ scale: plushieScale }], opacity: plushieOpacity }]}
           resizeMode="contain" 
         />
         
-        {/* FIX: overlay_drool erscheint NUR noch bei Tool 4 (Reinigung) */}
-        {isNeedActive && activeNeed?.toolId === 4 && (
-          <Image 
-            source={require('../assets/overlay_drool.png')} 
-            style={styles.statusOverlay} 
-            resizeMode="contain" 
-          />
-        )}
+        {/* overlay_drool wurde entfernt, da mixer_dirty.png den Zustand übernimmt */}
 
         <View style={styles.particleLayer}>
           {heartList.map((heart) => (
@@ -90,7 +95,6 @@ const styles = StyleSheet.create({
   bubbleTail: { position: 'absolute', bottom: -10, left: '50%', marginLeft: -10, width: 0, height: 0, borderLeftWidth: 10, borderRightWidth: 10, borderTopWidth: 10, borderTopColor: Theme.colors.primaryBrown, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
   plushieContainer: { marginTop: 320, position: 'relative' },
   plushieImage: { width: Theme.layout.plushieWidth, height: Theme.layout.plushieHeight },
-  statusOverlay: { position: 'absolute', top: '20%', left: '15%', width: '70%', height: '60%', zIndex: 5 },
   particleLayer: { position: 'absolute', top: -50, left: 80, width: 40, height: 40 },
   draggableTool: { position: 'absolute', bottom: 10, left: '50%', marginLeft: -56, zIndex: 10 },
   toolIcon: { width: 112, height: 112, resizeMode: 'contain' }

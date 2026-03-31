@@ -73,7 +73,8 @@ export default function App() {
         activeTool={activeTool} 
         currentSpeech={mixerSpeech} 
         activeNeed={engine.activeNeed} 
-        isNeedActive={engine.isNeedActive} 
+        isNeedActive={engine.isNeedActive}
+        isSleeping={engine.isSleeping} // Neu: Schlafstatus übergeben
       />
       
       <BottomToolbar activeTool={activeTool} onSelectTool={handleSelectTool} activeNeed={engine.activeNeed} isNeedActive={engine.isNeedActive} />
