@@ -97,8 +97,6 @@ export function useGameEngine(showDialog) {
       setActiveNeed(data.activeNeed);
       if (data.userData) setUserData(data.userData);
 
-      // Startup-Dialog wurde wie gewünscht entfernt.
-
       const locResult = await LocationService.getCurrentLocationData();
       if (locResult.success) {
         setCurrentLocation({ city: locResult.city, lat: locResult.lat, lon: locResult.lon });
@@ -108,12 +106,20 @@ export function useGameEngine(showDialog) {
 
       setIsAppReady(true);
       
+      // Nutzt direkt die Daten aus dem Speicher, um Abhängigkeitsprobleme mit userData zu umgehen
       if (!data.activeNeed && !TimeService.isMixerSleeping(new Date().getHours())) {
-        generateRandomNeed();
+        if (data.userData?.lat !== 0 && data.userData?.lon !== 0) {
+            generateRandomNeed();
+        }
       }
     };
-    init();
-  }, [generateRandomNeed]);
+    
+    // Verhindert, dass init() noch mal läuft, wenn sich States ändern
+    if (!isAppReady) {
+      init();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // <-- Das leere Array sorgt dafür, dass dieser Code nur ein einziges Mal beim App-Start ausgeführt wird.
 
   const processInteraction = (activeTool) => {
     if (isSleeping || !isNeedActive || activeTool !== activeNeed.toolId) return { success: false };
@@ -152,7 +158,7 @@ export function useGameEngine(showDialog) {
     rewardEvent, 
     isAppReady, 
     processInteraction, 
-    setUserData, // Damit die App die neuen Daten von SettingsModal in den State schieben kann
+    setUserData, 
     resetGame: async () => { 
       setCount(0); 
       setLogbook([]); 
