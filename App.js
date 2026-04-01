@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SafeAreaView, StyleSheet, View, Text } from 'react-native';
+import { SafeAreaView, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 
 import TopBar from './components/TopBar';
 import BottomToolbar from './components/BottomToolbar';
@@ -25,7 +25,6 @@ export default function App() {
   const engine = useGameEngine(showDialog);
 
   useEffect(() => {
-    // Nur noch Berechtigungen beim Start anfordern
     NotificationService.requestPermissions();
   }, []);
 
@@ -63,6 +62,9 @@ export default function App() {
     }
   };
 
+  // CHECK: Fehlen die echten Geodaten?
+  const needsAddress = engine.userData.lat === 0 && engine.userData.lon === 0;
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: Theme.colors.background }]}>
       <TopBar count={engine.count} onOpenSettings={() => setSettingsVisible(true)} onOpenInfo={() => setInfoVisible(true)} />
@@ -73,13 +75,23 @@ export default function App() {
         activeTool={activeTool} 
         currentSpeech={mixerSpeech} 
         activeNeed={engine.activeNeed} 
-        isNeedActive={engine.isNeedActive}
-        isSleeping={engine.isSleeping} // Neu: Schlafstatus übergeben
+        isNeedActive={engine.isNeedActive} 
       />
       
       <BottomToolbar activeTool={activeTool} onSelectTool={handleSelectTool} activeNeed={engine.activeNeed} isNeedActive={engine.isNeedActive} />
       
-      {engine.isSleeping && (
+      {/* DER NEUE STARTUP-LOCK */}
+      {needsAddress && !isSettingsVisible && engine.isAppReady && (
+        <View style={styles.addressLock}>
+          <Text style={styles.addressLockTitle}>🏠 Willkommen!</Text>
+          <Text style={styles.addressLockText}>Bevor das Abenteuer losgeht, musst du Mixer zeigen, wo sein Zuhause ist. Sonst verläuft er sich!</Text>
+          <TouchableOpacity style={styles.openSettingsBtn} onPress={() => setSettingsVisible(true)}>
+            <Text style={styles.openSettingsBtnText}>Heimatort eintragen</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {engine.isSleeping && !needsAddress && (
         <View style={styles.nightLock}>
           <Text style={styles.nightText}>Mixer schläft gerade... 💤</Text>
         </View>
@@ -96,5 +108,10 @@ export default function App() {
 const styles = StyleSheet.create({ 
   container: { flex: 1 },
   nightLock: { ...StyleSheet.absoluteFillObject, backgroundColor: Theme.colors.nightOverlay, justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
-  nightText: { fontSize: 22, fontWeight: 'bold', color: Theme.colors.modalYellow, textAlign: 'center', paddingHorizontal: 30 }
+  nightText: { fontSize: 22, fontWeight: 'bold', color: Theme.colors.modalYellow, textAlign: 'center', paddingHorizontal: 30 },
+  addressLock: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255, 247, 212, 0.95)', justifyContent: 'center', alignItems: 'center', zIndex: 2000, padding: 30 },
+  addressLockTitle: { fontSize: 28, fontWeight: 'bold', color: Theme.colors.primaryBrown, marginBottom: 15, textAlign: 'center' },
+  addressLockText: { fontSize: 18, color: Theme.colors.primaryBrown, textAlign: 'center', marginBottom: 35, lineHeight: 26 },
+  openSettingsBtn: { backgroundColor: Theme.colors.primaryBrown, paddingVertical: 15, paddingHorizontal: 35, borderRadius: 30, elevation: 5 },
+  openSettingsBtnText: { color: 'white', fontSize: 18, fontWeight: 'bold' }
 });

@@ -11,21 +11,19 @@ import { Config } from '../constants/Config';
 export function useGameEngine(showDialog) {
   const [count, setCount] = React.useState(0);
   const [logbook, setLogbook] = React.useState([]);
-  const [userData, setUserData] = React.useState({ name: Config.DEFAULT_USERNAME, address: 'Suche...', lat: 0, lon: 0 });
+  const [userData, setUserData] = React.useState({ name: Config.DEFAULT_USERNAME, address: '', lat: 0, lon: 0 });
   const [currentLocation, setCurrentLocation] = React.useState({ city: 'Unbekannt', lat: 0, lon: 0 });
   const [rewardEvent, setRewardEvent] = React.useState({ id: 0, amount: 0 });
   const [isAppReady, setIsAppReady] = React.useState(false);
   const [activeNeed, setActiveNeed] = React.useState(null);
   const [forceRefresh, setForceRefresh] = React.useState(0); 
 
-  // SOFORT-CHECK beim Erzeugen des Hooks
   const [isSleeping, setIsSleeping] = React.useState(() => {
     return TimeService.isMixerSleeping(new Date().getHours());
   });
 
   const isNeedActive = activeNeed && Date.now() >= activeNeed.timestamp;
 
-  // DER LIVE-UMSCHALTER: Prüft alle 30 Sekunden, ob Mixer umschalten muss
   React.useEffect(() => {
     const timer = setInterval(() => {
       const currentHour = new Date().getHours();
@@ -37,7 +35,6 @@ export function useGameEngine(showDialog) {
     return () => clearInterval(timer);
   }, [isSleeping]);
 
-  // UI-Refresh wenn ein Bedürfnis "fällig" wird
   React.useEffect(() => {
     if (activeNeed && !isNeedActive) {
       const delay = activeNeed.timestamp - Date.now();
@@ -48,10 +45,6 @@ export function useGameEngine(showDialog) {
     }
   }, [activeNeed, isNeedActive]);
 
-  /**
-   * Berechnet den nächsten Wach-Zeitpunkt.
-   * Schiebt Zeiten in der Nacht automatisch auf den nächsten Morgen.
-   */
   const calculateAwakeTrigger = React.useCallback((delayMs) => {
     const now = new Date();
     let triggerTime = new Date(now.getTime() + delayMs);
@@ -60,7 +53,6 @@ export function useGameEngine(showDialog) {
     const endNight = parseInt(Config.NIGHT_MODE_END?.split(':')[0] || 6);
     const hour = triggerTime.getHours();
 
-    // Logik: Falls in der Nacht, setze auf "Morgen nach Ende der Nachtruhe"
     if (startNight > endNight) {
       if (hour >= startNight || hour < endNight) {
         triggerTime.setHours(endNight + 1, 0, 0, 0); 
@@ -74,12 +66,9 @@ export function useGameEngine(showDialog) {
     return triggerTime;
   }, []);
 
-  /**
-   * Generiert ein neues Bedürfnis und plant die Benachrichtigung.
-   */
   const generateRandomNeed = React.useCallback(async (lastToolId = null) => {
-    // STRIKTE NACHTSPERRE: Keine neuen Bedürfnisse im Schlaf
-    if (isSleeping) return;
+    // Wenn Geodaten fehlen, generieren wir keine Bedürfnisse (App ist gelockt)
+    if (isSleeping || (userData.lat === 0 && userData.lon === 0)) return;
 
     const toolIds = [1, 2, 3, 4, 5];
     let randomTool;
@@ -97,13 +86,9 @@ export function useGameEngine(showDialog) {
     const messages = { 1: "Hunger! 🍎", 2: "Durst! 🥤", 3: "Streichel mich! ✋", 4: "Dreckig! 🧼", 5: "Rede mit mir! 💬" };
     const secondsToTrigger = Math.max((triggerTime.getTime() - Date.now()) / 1000, 1);
     
-    // Notification nur planen, wenn Mixer wach ist
     await NotificationService.scheduleReminder(secondsToTrigger, "Mixer", messages[randomTool]);
-  }, [isSleeping, calculateAwakeTrigger]);
+  }, [isSleeping, calculateAwakeTrigger, userData]);
 
-  /**
-   * Initialisierung beim App-Start
-   */
   React.useEffect(() => {
     const init = async () => {
       const data = await StorageService.loadGameData();
@@ -111,6 +96,8 @@ export function useGameEngine(showDialog) {
       setLogbook(data.logbook || []);
       setActiveNeed(data.activeNeed);
       if (data.userData) setUserData(data.userData);
+
+      // Startup-Dialog wurde wie gewünscht entfernt.
 
       const locResult = await LocationService.getCurrentLocationData();
       if (locResult.success) {
@@ -121,7 +108,6 @@ export function useGameEngine(showDialog) {
 
       setIsAppReady(true);
       
-      // Nur generieren, wenn wir wach sind und kein Wunsch offen ist
       if (!data.activeNeed && !TimeService.isMixerSleeping(new Date().getHours())) {
         generateRandomNeed();
       }
@@ -129,11 +115,7 @@ export function useGameEngine(showDialog) {
     init();
   }, [generateRandomNeed]);
 
-  /**
-   * Verarbeitung der User-Aktion
-   */
   const processInteraction = (activeTool) => {
-    // Interaktion im Schlaf oder ohne aktives Bedürfnis blockieren
     if (isSleeping || !isNeedActive || activeTool !== activeNeed.toolId) return { success: false };
 
     const distance = getDistanceFromLatLonInKm(userData.lat, userData.lon, currentLocation.lat, currentLocation.lon);
@@ -143,7 +125,6 @@ export function useGameEngine(showDialog) {
     setCount(prev => prev + earned);
     setRewardEvent({ id: Date.now(), amount: earned });
 
-    // Logbuch aktualisieren
     setLogbook(prev => {
       const idx = prev.findIndex(e => e.city === currentLocation.city);
       if (idx >= 0) {
@@ -158,7 +139,6 @@ export function useGameEngine(showDialog) {
     setActiveNeed(null);
     StorageService.saveActiveNeed(null);
     
-    // Nächstes Bedürfnis würfeln (wird durch generateRandomNeed nachts gestoppt)
     generateRandomNeed(lastId);
 
     return { success: true, isAtHome: result.isAtHome };
@@ -172,6 +152,7 @@ export function useGameEngine(showDialog) {
     rewardEvent, 
     isAppReady, 
     processInteraction, 
+    setUserData, // Damit die App die neuen Daten von SettingsModal in den State schieben kann
     resetGame: async () => { 
       setCount(0); 
       setLogbook([]); 

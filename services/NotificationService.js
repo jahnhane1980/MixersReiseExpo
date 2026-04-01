@@ -14,8 +14,13 @@ export const NotificationService = {
    * Fordert Berechtigungen an und konfiguriert den Android-Kanal.
    */
   async requestPermissions() {
-    const { status } = await Notifications.getPermissionsAsync();
-    if (status !== 'granted') return false;
+    // FIX: requestPermissionsAsync fragt den User aktiv nach der Erlaubnis
+    const { status } = await Notifications.requestPermissionsAsync();
+    
+    if (status !== 'granted') {
+      console.log("Benachrichtigungen wurden nicht erlaubt.");
+      return false;
+    }
 
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('mixer-urgent', {
