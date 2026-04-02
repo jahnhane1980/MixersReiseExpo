@@ -1,9 +1,15 @@
 import { Config } from '../constants/Config';
 
 /**
- * Berechnet die verdienten Herzen basierend auf Tool, Distanz und REAKTIONSZEIT.
+ * Berechnet die verdienten Herzen basierend auf Tool, Distanz, REAKTIONSZEIT und GENAUIGKEIT.
+ * @param {number} activeTool - ID des verwendeten Tools
+ * @param {number} distance - Aktuelle Distanz zum Heimatort
+ * @param {object} basePointsMap - Map der Basispunkte
+ * @param {array} thresholds - Distanz-Multiplikatoren
+ * @param {object} activeNeed - Das aktuelle Bedürfnis { toolId, timestamp }
+ * @param {number} accuracy - Aktuelle GPS-Genauigkeit in Metern
  */
-export const calculateEarnedHearts = (activeTool, distance, basePointsMap, thresholds, activeNeed) => {
+export const calculateEarnedHearts = (activeTool, distance, basePointsMap, thresholds, activeNeed, accuracy = 0) => {
   const basePoints = basePointsMap[activeTool] || 0;
   let timeFactor = 1.0;
   let isPenalty = false;
@@ -24,34 +30,39 @@ export const calculateEarnedHearts = (activeTool, distance, basePointsMap, thres
     }
   }
 
-  // 2. Distanz-Multiplikator suchen
+  // 2. KORREKTUR Anti-Cheat: Nur bestrafen, wenn wir SICHER zu Hause sind.
+  // Wenn die Ungenauigkeit (accuracy) größer als 50m ist, ignorieren wir den Malus.
+  const isActuallyAtHome = distance < 0.05 && accuracy < 50;
+
+  if (isActuallyAtHome) {
+    let hearts = Math.floor(basePoints * 0.5 * timeFactor);
+    // Sicherstellen, dass bei Erfolg (kein Penalty) immer mind. 1 Punkt vergeben wird
+    if (!isPenalty && hearts === 0 && basePoints > 0) hearts = 1;
+    
+    return {
+      earnedHearts: hearts,
+      multiplier: 0.5,
+      timeFactor: timeFactor,
+      isAtHome: true,
+      isPenalty
+    };
+  }
+
+  // 3. Distanz-Multiplikator suchen
   let distMultiplier = 1;
   const thresholdMatch = thresholds.find(t => distance >= t.minKm);
   if (thresholdMatch) {
     distMultiplier = thresholdMatch.multiplier;
   }
 
-  // 3. Anti-Cheat: Heimatort-Malus (50% Punkte)
-  let finalMultiplier = distMultiplier;
-  let isAtHome = false;
-  if (distance < 0.05) {
-    finalMultiplier = 0.5;
-    isAtHome = true;
-  }
-
-  // 4. Berechnung mit Absicherung gegen 0-Punkte-Hänger
-  let earnedHearts = Math.floor(basePoints * finalMultiplier * timeFactor);
-
-  // KORREKTUR: Wenn es kein Penalty ist, aber die Rundung 0 ergibt, gib mindestens 1 Herz.
-  if (!isPenalty && earnedHearts === 0 && basePoints > 0) {
-    earnedHearts = 1;
-  }
+  let finalHearts = Math.floor(basePoints * distMultiplier * timeFactor);
+  if (!isPenalty && finalHearts === 0 && basePoints > 0) finalHearts = 1;
 
   return {
-    earnedHearts,
-    multiplier: finalMultiplier,
+    earnedHearts: finalHearts,
+    multiplier: distMultiplier,
     timeFactor: timeFactor,
-    isAtHome,
+    isAtHome: false,
     isPenalty
   };
 };

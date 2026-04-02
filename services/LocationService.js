@@ -17,11 +17,16 @@ export const LocationService = {
           city: 'Test-City',
           lat: 50.0,
           lon: 10.0,
+          accuracy: 5, // Mock-Genauigkeit von 5 Metern
           rawAddressData: { street: 'Mockstraße', streetNumber: '42', postalCode: '12345', city: 'Test-City' }
         };
       }
 
-      let loc = await Location.getCurrentPositionAsync({});
+      // KORREKTUR: Ausgewogene Genauigkeit anfordern für stabilere Werte
+      let loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      
       let geo = await Location.reverseGeocodeAsync(loc.coords);
       
       if (geo.length > 0) {
@@ -31,6 +36,7 @@ export const LocationService = {
           city: currentCity,
           lat: loc.coords.latitude,
           lon: loc.coords.longitude,
+          accuracy: loc.coords.accuracy, // Radius der Genauigkeit in Metern
           rawAddressData: geo[0]
         };
       }
