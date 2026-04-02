@@ -17,7 +17,10 @@ export function useGameEngine(showDialog) {
   const [isAppReady, setIsAppReady] = React.useState(false);
   const [activeNeed, setActiveNeed] = React.useState(null);
   const [forceRefresh, setForceRefresh] = React.useState(0); 
-  const [isOverdue, setIsOverdue] = React.useState(false); // NEU: Flag für "zu lange gewartet"
+  const [isOverdue, setIsOverdue] = React.useState(false);
+  const [isJetlagged, setIsJetlagged] = React.useState(false);
+  const [adaptedLocation, setAdaptedLocation] = React.useState(null); 
+  const [debugInfo, setDebugInfo] = React.useState(""); 
 
   const [isSleeping, setIsSleeping] = React.useState(() => {
     return TimeService.isMixerSleeping(new Date().getHours());
@@ -29,91 +32,34 @@ export function useGameEngine(showDialog) {
     const timer = setInterval(() => {
       const currentHour = new Date().getHours();
       const shouldBeSleeping = TimeService.isMixerSleeping(currentHour);
-      if (shouldBeSleeping !== isSleeping) {
-        setIsSleeping(shouldBeSleeping);
-      }
+      if (shouldBeSleeping !== isSleeping) setIsSleeping(shouldBeSleeping);
     }, 30000); 
     return () => clearInterval(timer);
   }, [isSleeping]);
 
   React.useEffect(() => {
-    if (activeNeed && !isNeedActive) {
-      const delay = activeNeed.timestamp - Date.now();
-      const timer = setTimeout(() => {
-        setForceRefresh(prev => prev + 1); 
-      }, delay + 100); 
-      return () => clearTimeout(timer);
+    if (isJetlagged && isSleeping && currentLocation.lat !== 0) {
+      setIsJetlagged(false); 
+      const newAdaptation = { lat: currentLocation.lat, lon: currentLocation.lon };
+      setAdaptedLocation(newAdaptation);
+      StorageService.saveAdaptedLocation(newAdaptation);
     }
-  }, [activeNeed, isNeedActive]);
+  }, [isJetlagged, isSleeping, currentLocation.lat, currentLocation.lon]);
 
-  // NEU: Der Live-Watcher für abgelaufene Zeit (Trauer-Modus VOR der Interaktion)
-  React.useEffect(() => {
-    let timer;
-    if (activeNeed && isNeedActive) {
-      const timeSinceNeed = Date.now() - activeNeed.timestamp;
-      const penaltyThreshold = Config.NEED_CONFIG.PENALTY_AFTER;
-
-      if (timeSinceNeed >= penaltyThreshold) {
-        setIsOverdue(true); // Direkt auf traurig setzen, wenn Zeit schon überschritten ist
-      } else {
-        setIsOverdue(false);
-        // Timer stellen, der exakt in dem Moment feuert, wenn das Limit erreicht wird
-        timer = setTimeout(() => {
-          setIsOverdue(true);
-        }, penaltyThreshold - timeSinceNeed);
-      }
-    } else {
-      setIsOverdue(false);
+  const performJetlagCheck = async () => {
+    const baseLat = adaptedLocation ? adaptedLocation.lat : userData.lat;
+    const baseLon = adaptedLocation ? adaptedLocation.lon : userData.lon;
+    if (baseLat !== 0 && currentLocation.lat !== 0) {
+      const result = await TimeService.checkJetlag(currentLocation.lat, currentLocation.lon, baseLat, baseLon);
+      setIsJetlagged(result.isJetlagged);
+      const baseMode = adaptedLocation ? "Adaptiert" : "Heimat";
+      setDebugInfo(`${baseMode} | Diff: ${result.diff}h | Tol: ${result.tolerance}h`);
     }
-    return () => { if (timer) clearTimeout(timer); };
-  }, [activeNeed, isNeedActive]);
-
-  const calculateAwakeTrigger = React.useCallback((delayMs) => {
-    const now = new Date();
-    let triggerTime = new Date(now.getTime() + delayMs);
-    const startNight = parseInt(Config.NIGHT_MODE_START?.split(':')[0] || 22);
-    const endNight = parseInt(Config.NIGHT_MODE_END?.split(':')[0] || 6);
-    const hour = triggerTime.getHours();
-
-    if (startNight > endNight) {
-      if (hour >= startNight || hour < endNight) {
-        triggerTime.setHours(endNight + 1, 0, 0, 0); 
-        if (hour >= startNight) triggerTime.setDate(triggerTime.getDate() + 1);
-      }
-    } else {
-      if (hour >= startNight && hour < endNight) {
-        triggerTime.setHours(endNight + 1, 0, 0, 0);
-      }
-    }
-    return triggerTime;
-  }, []);
-
-  const generateRandomNeed = React.useCallback(async (lastToolId = null) => {
-    if (isSleeping || (userData.lat === 0 && userData.lon === 0)) return;
-
-    const toolIds = [1, 2, 3, 4, 5];
-    let randomTool;
-    do {
-      randomTool = toolIds[Math.floor(Math.random() * toolIds.length)];
-    } while (randomTool === lastToolId);
-
-    const delay = Math.random() * (Config.NEED_CONFIG.NEXT_NEED_DELAY_MAX - Config.NEED_CONFIG.NEXT_NEED_DELAY_MIN) + Config.NEED_CONFIG.NEXT_NEED_DELAY_MIN;
-    const triggerTime = calculateAwakeTrigger(delay);
-
-    const newNeed = { toolId: randomTool, timestamp: triggerTime.getTime() };
-    setActiveNeed(newNeed);
-    await StorageService.saveActiveNeed(newNeed);
-
-    const messages = { 1: "Hunger! 🍎", 2: "Durst! 🥤", 3: "Streichel mich! ✋", 4: "Dreckig! 🧼", 5: "Rede mit mir! 💬" };
-    const secondsToTrigger = Math.max((triggerTime.getTime() - Date.now()) / 1000, 1);
-    await NotificationService.scheduleReminder(secondsToTrigger, "Mixer", messages[randomTool]);
-  }, [isSleeping, calculateAwakeTrigger, userData]);
+  };
 
   React.useEffect(() => {
-    if (isAppReady && !activeNeed && !isSleeping && userData.lat !== 0 && userData.lon !== 0) {
-      generateRandomNeed();
-    }
-  }, [isAppReady, activeNeed, isSleeping, userData.lat, userData.lon, generateRandomNeed]);
+    performJetlagCheck();
+  }, [userData.lat, userData.lon, currentLocation.lat, currentLocation.lon, adaptedLocation]);
 
   React.useEffect(() => {
     const init = async () => {
@@ -122,6 +68,7 @@ export function useGameEngine(showDialog) {
       setLogbook(data.logbook || []);
       setActiveNeed(data.activeNeed);
       if (data.userData) setUserData(data.userData);
+      if (data.adaptedLocation) setAdaptedLocation(data.adaptedLocation);
 
       const locResult = await LocationService.getCurrentLocationData();
       if (locResult.success) {
@@ -135,50 +82,39 @@ export function useGameEngine(showDialog) {
   }, [isAppReady]);
 
   const processInteraction = (activeTool) => {
-    if (isSleeping || !isNeedActive || activeTool !== activeNeed.toolId) return { success: false };
-
+    if (isSleeping || !activeNeed || activeTool !== activeNeed.toolId) return { success: false };
     const distance = getDistanceFromLatLonInKm(userData.lat, userData.lon, currentLocation.lat, currentLocation.lon);
     const result = calculateEarnedHearts(activeTool, distance, GameRules.TOOL_BASE_POINTS, GameRules.DISTANCE_THRESHOLDS, activeNeed);
-    
-    const earned = result.earnedHearts;
-    
     setCount(prev => {
-      const newCount = prev + earned;
+      const newCount = prev + result.earnedHearts;
       StorageService.savePunktestand(newCount); 
       return newCount;
     });
-
-    setRewardEvent({ id: Date.now(), amount: Math.abs(earned), isPenalty: result.isPenalty });
-
-    setLogbook(prev => {
-      let nextLogbook;
-      const idx = prev.findIndex(e => e.city === currentLocation.city);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = { ...next[idx], count: next[idx].count + earned };
-        nextLogbook = next;
-      } else {
-        nextLogbook = [...prev, { id: Date.now().toString(), city: currentLocation.city, count: earned }];
-      }
-      StorageService.saveLogbook(nextLogbook); 
-      return nextLogbook;
-    });
-
-    const lastId = activeNeed.toolId;
+    setRewardEvent({ id: Date.now(), amount: Math.abs(result.earnedHearts), isPenalty: result.isPenalty });
     setActiveNeed(null);
     StorageService.saveActiveNeed(null);
-    generateRandomNeed(lastId);
-
     return { success: true, isAtHome: result.isAtHome, isPenalty: result.isPenalty };
   };
 
   return {
-    count, logbook, userData, currentLocation, rewardEvent, isAppReady, processInteraction, setUserData,
+    count, userData, currentLocation, rewardEvent, isAppReady, processInteraction, 
+    setUserData: async (newData) => {
+      setUserData(newData);
+      await StorageService.saveUserData(newData);
+    },
     resetGame: async () => { 
-      setCount(0); setLogbook([]); setActiveNeed(null); 
+      // 1. Alle Speicher löschen
+      await StorageService.resetGameData(); 
+      // 2. Alle States sofort auf Null
+      setCount(0);
+      setLogbook([]);
       setUserData({ name: Config.DEFAULT_USERNAME, address: '', lat: 0, lon: 0 });
-      await StorageService.saveActiveNeed(null); await StorageService.resetGameData(); 
+      setActiveNeed(null);
+      setIsJetlagged(false);
+      setAdaptedLocation(null);
+      setIsOverdue(false);
+      setDebugInfo("");
     }, 
-    isSleeping, activeNeed, isNeedActive, isOverdue // NEU: exportiert
+    isSleeping, activeNeed, isNeedActive, isOverdue, isJetlagged, debugInfo 
   };
 }

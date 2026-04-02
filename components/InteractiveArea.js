@@ -12,7 +12,7 @@ const toolImages = {
   5: require('../assets/tool_talk.png'),
 };
 
-export default function InteractiveArea({ onApplyTool, rewardEvent, activeTool, currentSpeech, activeNeed, isNeedActive, isSleeping, isOverdue }) {
+export default function InteractiveArea({ onApplyTool, rewardEvent, activeTool, currentSpeech, activeNeed, isNeedActive, isSleeping, isOverdue, isJetlagged }) {
   const [heartList, setHeartList] = useState([]);
   const [isSad, setIsSad] = useState(false);
   const prevEventId = useRef(rewardEvent?.id || 0);
@@ -34,12 +34,14 @@ export default function InteractiveArea({ onApplyTool, rewardEvent, activeTool, 
     }
   }, [rewardEvent]);
 
-  // NEU: Wenn isOverdue = true, ist Mixer sofort traurig, noch bevor interagiert wird
+  // NEU: Jetlag-Bild hat Priorität über Traurigkeit und Schmutz
   const characterSource = isSleeping 
     ? require('../assets/mixer_sleeping.png')
-    : (isSad || isOverdue) 
-      ? require('../assets/mixer_sad.png')
-      : (isNeedActive && activeNeed?.toolId === 4) ? require('../assets/mixer_dirty.png') : require('../assets/mixer_idle.png');
+    : isJetlagged
+      ? require('../assets/mixer_jetlag.png')
+      : (isSad || isOverdue) 
+        ? require('../assets/mixer_sad.png')
+        : (isNeedActive && activeNeed?.toolId === 4) ? require('../assets/mixer_dirty.png') : require('../assets/mixer_idle.png');
 
   return (
     <ImageBackground source={require('../assets/bg_bedroom_plushies.png')} style={styles.mainArea} resizeMode="cover" imageStyle={{ transform: [{ scale: 1.3 }] }} >

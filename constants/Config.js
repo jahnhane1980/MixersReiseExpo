@@ -5,7 +5,7 @@ export const Config = {
   MOCK_LOCATION: false, 
   
   NIGHT_MODE_START: '22:00',  //Test '08:00', 
-  NIGHT_MODE_END: '01:00',   //Test '10:00',   
+  NIGHT_MODE_END: '04:00',   //Test '10:00',   
 
 NEED_CONFIG: {
     FULL_POINTS_UNTIL: 2000, //15 * 60 * 1000,  // 15 Min: Volle Belohnung, Test 2000

@@ -2,70 +2,65 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Config } from '../constants/Config';
 
 export const StorageService = {
-  // Lädt alle Spieldaten auf einmal beim App-Start
   async loadGameData() {
     try {
       const savedCount = await AsyncStorage.getItem('@punktestand');
       const savedLogbook = await AsyncStorage.getItem('@logbook');
       const savedUser = await AsyncStorage.getItem('@user_data');
       const savedNeed = await AsyncStorage.getItem('@active_need');
+      const savedAdaptedLoc = await AsyncStorage.getItem('@adapted_location');
 
       return {
         punktestand: savedCount ? parseInt(savedCount, 10) : 0,
         logbook: savedLogbook ? JSON.parse(savedLogbook) : [],
         userData: savedUser ? JSON.parse(savedUser) : null,
-        activeNeed: savedNeed ? JSON.parse(savedNeed) : null, // NEU
+        activeNeed: savedNeed ? JSON.parse(savedNeed) : null,
+        adaptedLocation: savedAdaptedLoc ? JSON.parse(savedAdaptedLoc) : null,
       };
     } catch (error) {
-      if (Config.DEBUG_MODE) console.error("StorageService: Fehler beim Laden der Daten:", error);
-      return { punktestand: 0, logbook: [], userData: null, activeNeed: null };
+      if (Config.DEBUG_MODE) console.error("StorageService: Fehler beim Laden:", error);
+      return { punktestand: 0, logbook: [], userData: null, activeNeed: null, adaptedLocation: null };
     }
   },
 
   async savePunktestand(count) {
     try {
       await AsyncStorage.setItem('@punktestand', count.toString());
-    } catch (error) {
-      if (Config.DEBUG_MODE) console.error("StorageService: Fehler beim Speichern des Punktestands:", error);
-    }
+    } catch (error) {}
   },
 
-  // NEU: Speichert das aktuelle Bedürfnis (Tool-ID und Timestamp)
   async saveActiveNeed(need) {
     try {
-      if (need) {
-        await AsyncStorage.setItem('@active_need', JSON.stringify(need));
-      } else {
-        await AsyncStorage.removeItem('@active_need');
-      }
-    } catch (error) {
-      if (Config.DEBUG_MODE) console.error("StorageService: Fehler beim Speichern des Bedarfs:", error);
-    }
+      if (need) await AsyncStorage.setItem('@active_need', JSON.stringify(need));
+      else await AsyncStorage.removeItem('@active_need');
+    } catch (error) {}
+  },
+
+  async saveAdaptedLocation(location) {
+    try {
+      if (location) await AsyncStorage.setItem('@adapted_location', JSON.stringify(location));
+      else await AsyncStorage.removeItem('@adapted_location');
+    } catch (error) {}
   },
 
   async saveLogbook(logbook) {
     try {
       await AsyncStorage.setItem('@logbook', JSON.stringify(logbook));
-    } catch (error) {
-      if (Config.DEBUG_MODE) console.error("StorageService: Fehler beim Speichern des Logbuchs:", error);
-    }
+    } catch (error) {}
   },
 
   async saveUserData(userData) {
     try {
       await AsyncStorage.setItem('@user_data', JSON.stringify(userData));
-    } catch (error) {
-      if (Config.DEBUG_MODE) console.error("StorageService: Fehler beim Speichern der Nutzerdaten:", error);
-    }
+    } catch (error) {}
   },
 
+  // TOTAL RESET: Löscht alles ohne Ausnahme
   async resetGameData() {
     try {
-      await AsyncStorage.removeItem('@punktestand');
-      await AsyncStorage.removeItem('@logbook');
-      await AsyncStorage.removeItem('@active_need'); // NEU
+      await AsyncStorage.clear();
     } catch (error) {
-      if (Config.DEBUG_MODE) console.error("StorageService: Fehler beim Zurücksetzen der Daten:", error);
+      if (Config.DEBUG_MODE) console.error("StorageService: Fehler beim Reset:", error);
     }
   }
 };
