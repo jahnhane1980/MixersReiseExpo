@@ -2,7 +2,7 @@ import * as React from 'react';
 import { StorageService } from '../services/StorageService';
 import { LocationService } from '../services/LocationService';
 import { TimeService } from '../services/TimeService';
-import { NotificationService } from '../services/NotificationService'; // Wieder enthalten
+import { NotificationService } from '../services/NotificationService'; 
 import { calculateEarnedHearts } from '../utils/gameLogic';
 import { getDistanceFromLatLonInKm } from '../utils/locationUtils';
 import { GameRules } from '../constants/GameRules'; 
@@ -16,19 +16,22 @@ const NEED_MESSAGES = {
   5: "Rede mit mir! 💬" 
 };
 
-// Hilfsfunktion (außerhalb für Stabilität)
+// Statische Hilfsfunktion für stabile Abhängigkeiten
 const calculateAwakeTrigger = (delayMs) => {
   const now = new Date();
   let triggerTime = new Date(now.getTime() + delayMs);
   const start = parseInt(Config.NIGHT_MODE_START.split(':')[0]);
   const end = parseInt(Config.NIGHT_MODE_END.split(':')[0]);
   const hr = triggerTime.getHours();
+  
   if (start > end) {
     if (hr >= start || hr < end) {
       triggerTime.setHours(end, 0, 0, 0); 
       if (hr >= start) triggerTime.setDate(triggerTime.getDate() + 1);
     }
-  } else if (hr >= start && hr < end) triggerTime.setHours(end, 0, 0, 0);
+  } else if (hr >= start && hr < end) {
+    triggerTime.setHours(end, 0, 0, 0);
+  }
   return triggerTime;
 };
 
@@ -54,7 +57,7 @@ export function useGameEngine(showDialog) {
   const homeLon = userData.lon;
   const isNeedActive = activeNeed && Date.now() >= activeNeed.timestamp;
 
-  // --- AUTOMATISCHE SPEICHERUNG (React 19 Standard) ---
+  // --- AUTOMATISCHE SPEICHERUNG ---
   React.useEffect(() => {
     if (isAppReady) StorageService.savePunktestand(count);
   }, [count, isAppReady]);
@@ -95,23 +98,34 @@ export function useGameEngine(showDialog) {
     return () => { if (timer) clearTimeout(timer); };
   }, [activeNeed, isNeedActive]);
 
-  // Jetlag-Logik
+  // KORREKTUR: Jetlag-Logik mit Schutz gegen Race-Conditions
   React.useEffect(() => {
+    let ignore = false; // Flag für veraltete Anfragen
+
     const check = async () => {
       const baseLat = adaptedLocation ? adaptedLocation.lat : homeLat;
       const baseLon = adaptedLocation ? adaptedLocation.lon : homeLon;
+      
       if (baseLat !== 0 && currentLocation.lat !== 0) {
         const res = await TimeService.checkJetlag(currentLocation.lat, currentLocation.lon, baseLat, baseLon);
-        if (res.success) {
-          setIsJetlagged(res.isJetlagged);
-          setDebugInfo(`${adaptedLocation ? "Adaptiert" : "Heimat"} | Diff: ${res.diff}h | Tol: ${res.tolerance}h`);
-        } else {
-          setIsJetlagged(false);
-          setDebugInfo("⚠️ Zeit-API Fehler");
+        
+        // Nur verarbeiten, wenn dies noch die aktuellste Anfrage ist
+        if (!ignore) {
+          if (res.success) {
+            setIsJetlagged(res.isJetlagged);
+            setDebugInfo(`${adaptedLocation ? "Adaptiert" : "Heimat"} | Diff: ${res.diff}h | Tol: ${res.tolerance}h`);
+          } else {
+            setIsJetlagged(false);
+            setDebugInfo("⚠️ Zeit-API Fehler");
+          }
         }
       }
     };
     check();
+
+    return () => {
+      ignore = true; // Markiert die Anfrage als veraltet, falls sich Abhängigkeiten ändern
+    };
   }, [homeLat, homeLon, currentLocation.lat, currentLocation.lon, adaptedLocation]);
 
   // --- INITIALISIERUNG ---
