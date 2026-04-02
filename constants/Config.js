@@ -1,14 +1,14 @@
 // constants/Config.js
 
-const DEBUG_MODE = true; 
+const DEBUG_MODE = false; 
 
 export const Config = {
   DEFAULT_USERNAME: 'Entdecker',
   DEBUG_MODE: DEBUG_MODE,
   MOCK_LOCATION: false, 
   
-  NIGHT_MODE_START: '22:00',
-  NIGHT_MODE_END: '04:00',
+  NIGHT_MODE_START: '19:00',
+  NIGHT_MODE_END: '06:00',
 
   NEED_CONFIG: DEBUG_MODE ? {
     FULL_POINTS_UNTIL: 2000, 

@@ -155,18 +155,11 @@ export function useGameEngine(showDialog) {
           setUserData(data.userData);
         }
         
-        // Validierung des geladenen Bedürfnisses (Vermeidung von undefined Crashes)
+        // KORREKTUR: Entfernen der "Fairness-Logik", damit Vernachlässigung korrekt erkannt wird.
         if (data.activeNeed && data.activeNeed.timestamp) {
-          let need = data.activeNeed;
-          const now = Date.now();
-          // Fairness-Logik
-          if (now > need.timestamp) {
-            need = { ...need, timestamp: now };
-            await StorageService.saveActiveNeed(need);
-          }
-          setActiveNeed(need);
+          setActiveNeed(data.activeNeed);
           // Notification neu planen falls nötig
-          scheduleOverdueNotification(need);
+          scheduleOverdueNotification(data.activeNeed);
         }
 
         if (data.adaptedLocation) setAdaptedLocation(data.adaptedLocation);
