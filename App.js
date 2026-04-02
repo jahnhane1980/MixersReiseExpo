@@ -9,31 +9,56 @@ import TopBar from './components/TopBar';
 import SettingsModal from './components/SettingsModal';
 import QuestionModal from './components/QuestionModal';
 import InfoDialog from './components/InfoDialog'; 
+import DiscoveryModal from './components/DiscoveryModal';
 
 export default function App() {
-  const [mixerSpeech, setMixerSpeech] = useState(null);
+  const [interactionSpeech, setInteractionSpeech] = useState(null);
   const [activeTool, setActiveTool] = useState(null);
   const [isSettingsVisible, setSettingsVisible] = useState(false);
+  const [isInfoVisible, setInfoVisible] = useState(false);
   const [isQuestionVisible, setQuestionVisible] = useState(false);
   const [dialogConfig, setDialogConfig] = useState({ visible: false, title: '', message: '' });
 
   const showDialog = (title, message) => setDialogConfig({ visible: true, title, message });
   const engine = useGameEngine(showDialog);
 
-  // DEBUG-ANZEIGE: Zeigt wichtige Zustände live in der Sprechblase
-  useEffect(() => {
+  const getSpeechText = () => {
+    if (interactionSpeech) return interactionSpeech; 
     if (Config.DEBUG_MODE) {
-      const info = `Jetlag: ${engine.isJetlagged ? 'JA' : 'NEIN'}\nSchlaf: ${engine.isSleeping ? 'JA' : 'NEIN'}\n${engine.debugInfo}`;
-      setMixerSpeech(info);
-    } else if (engine.isJetlagged) {
-      setMixerSpeech("Uff, mir brummt der Kopf! 😵‍💫");
+      const need = engine.activeNeed ? `Need: ${engine.activeNeed.toolId} (${engine.isNeedActive ? 'AKTIV' : 'WARTET'})` : 'Need: keines';
+      return `Jetlag: ${engine.isJetlagged ? 'JA' : 'NEIN'} | Schlaf: ${engine.isSleeping ? 'JA' : 'NEIN'}\n${need}\n${engine.debugInfo}`;
     }
-  }, [engine.isJetlagged, engine.isSleeping, engine.debugInfo]);
+    if (engine.isJetlagged) return "Uff, mir brummt der Kopf! 😵‍💫";
+    if (engine.isNeedActive && engine.activeNeedMessage) return engine.activeNeedMessage;
+    return null;
+  };
 
   const handleAction = () => {
     if (activeTool) {
       const res = engine.processInteraction(activeTool);
-      if (res.success) setActiveTool(null);
+      if (res.success) {
+        setActiveTool(null);
+        setInteractionSpeech(res.isPenalty ? "Das hat aber lange gedauert... 😢" : "Danke schön! ✨");
+        setTimeout(() => setInteractionSpeech(null), 5000);
+      }
+    }
+  };
+
+  const handleSelectTool = (id) => {
+    if (engine.isSleeping) return;
+    if (engine.isNeedActive && id !== engine.activeNeed.toolId) {
+      showDialog("Mixer sagt:", "Das brauche ich gerade nicht! Schau mal, was ich wirklich will.");
+      return;
+    }
+    if (id === 5) setQuestionVisible(true); else setActiveTool(id);
+  };
+
+  const handleDialogueSelection = (item) => {
+    const res = engine.processInteraction(5);
+    if (res.success) {
+      setQuestionVisible(false);
+      setInteractionSpeech(res.isPenalty ? "Das hat aber lange gedauert... 😢" : item.answer);
+      setTimeout(() => setInteractionSpeech(null), 6000);
     }
   };
 
@@ -41,87 +66,31 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TopBar count={engine.count} onOpenSettings={() => setSettingsVisible(true)} />
-      
-      <InteractiveArea 
-        rewardEvent={engine.rewardEvent} onApplyTool={handleAction} activeTool={activeTool} 
-        currentSpeech={mixerSpeech} activeNeed={engine.activeNeed} isNeedActive={engine.isNeedActive} 
-        isSleeping={engine.isSleeping} isJetlagged={engine.isJetlagged}
-      />
-      
-      <BottomToolbar activeTool={activeTool} onSelectTool={setActiveTool} activeNeed={engine.activeNeed} isNeedActive={engine.isNeedActive} />
-
-      {/* FIX: Willkommens-Sperre wieder eingebaut */}
+      <TopBar count={engine.count} onOpenSettings={() => setSettingsVisible(true)} onOpenInfo={() => setInfoVisible(true)} />
+      <InteractiveArea rewardEvent={engine.rewardEvent} onApplyTool={handleAction} activeTool={activeTool} currentSpeech={getSpeechText()} activeNeed={engine.activeNeed} isNeedActive={engine.isNeedActive} isSleeping={engine.isSleeping} isJetlagged={engine.isJetlagged} />
+      <BottomToolbar activeTool={activeTool} onSelectTool={handleSelectTool} activeNeed={engine.activeNeed} isNeedActive={engine.isNeedActive} />
       {needsAddress && !isSettingsVisible && engine.isAppReady && (
         <View style={styles.addressLock}>
           <Text style={styles.addressLockTitle}>🏠 Willkommen!</Text>
-          <Text style={styles.addressLockText}>Bevor das Abenteuer losgeht, musst du Mixer zeigen, wo sein Zuhause ist. Sonst verläuft er sich!</Text>
+          <Text style={styles.addressLockText}>Bevor das Abenteuer losgeht, musst du Mixer zeigen, wo sein Zuhause ist.</Text>
           <TouchableOpacity style={styles.openSettingsBtn} onPress={() => setSettingsVisible(true)}>
             <Text style={styles.openSettingsBtnText}>Heimatort eintragen</Text>
           </TouchableOpacity>
         </View>
       )}
-
-      {/* FIX: Props onReset und showDialog an SettingsModal übergeben */}
-      <SettingsModal 
-        visible={isSettingsVisible} 
-        currentUserData={engine.userData} 
-        onClose={() => setSettingsVisible(false)} 
-        onSave={engine.setUserData}
-        showDialog={showDialog}
-        onReset={() => {
-          engine.resetGame();
-          setSettingsVisible(false);
-          showDialog("Reset", "Alles auf Null gesetzt!");
-        }}
-      />
-
-      <QuestionModal visible={isQuestionVisible} onClose={() => setQuestionVisible(false)} />
-      
-      <InfoDialog 
-        visible={dialogConfig.visible} 
-        title={dialogConfig.title} 
-        message={dialogConfig.message} 
-        onClose={() => setDialogConfig({ ...dialogConfig, visible: false })} 
-      />
+      <DiscoveryModal visible={isInfoVisible} onClose={() => setInfoVisible(false)} logbookData={engine.logbook} />
+      <SettingsModal visible={isSettingsVisible} currentUserData={engine.userData} onClose={() => setSettingsVisible(false)} onSave={engine.setUserData} showDialog={showDialog} onReset={() => { engine.resetGame(); setSettingsVisible(false); showDialog("Reset", "Alles auf Null gesetzt!"); }} />
+      <QuestionModal visible={isQuestionVisible} onClose={() => setQuestionVisible(false)} onSelectQuestion={handleDialogueSelection} />
+      <InfoDialog visible={dialogConfig.visible} title={dialogConfig.title} message={dialogConfig.message} onClose={() => setDialogConfig({ ...dialogConfig, visible: false })} />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({ 
   container: { flex: 1, backgroundColor: '#FFF' },
-  addressLock: { 
-    ...StyleSheet.absoluteFillObject, 
-    backgroundColor: 'rgba(255, 247, 212, 0.95)', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    zIndex: 2000, 
-    padding: 30 
-  },
-  addressLockTitle: { 
-    fontSize: 28, 
-    fontWeight: 'bold', 
-    color: Theme.colors.primaryBrown, 
-    marginBottom: 15, 
-    textAlign: 'center' 
-  },
-  addressLockText: { 
-    fontSize: 18, 
-    color: Theme.colors.primaryBrown, 
-    textAlign: 'center', 
-    marginBottom: 35, 
-    lineHeight: 26 
-  },
-  openSettingsBtn: { 
-    backgroundColor: Theme.colors.primaryBrown, 
-    paddingVertical: 15, 
-    paddingHorizontal: 35, 
-    borderRadius: 30, 
-    elevation: 5 
-  },
-  openSettingsBtnText: { 
-    color: 'white', 
-    fontSize: 18, 
-    fontWeight: 'bold' 
-  }
+  addressLock: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255, 247, 212, 0.95)', justifyContent: 'center', alignItems: 'center', zIndex: 2000, padding: 30 },
+  addressLockTitle: { fontSize: 28, fontWeight: 'bold', color: Theme.colors.primaryBrown, marginBottom: 15, textAlign: 'center' },
+  addressLockText: { fontSize: 18, color: Theme.colors.primaryBrown, textAlign: 'center', marginBottom: 35, lineHeight: 26 },
+  openSettingsBtn: { backgroundColor: Theme.colors.primaryBrown, paddingVertical: 15, paddingHorizontal: 35, borderRadius: 30, elevation: 5 },
+  openSettingsBtnText: { color: 'white', fontSize: 18, fontWeight: 'bold' }
 });

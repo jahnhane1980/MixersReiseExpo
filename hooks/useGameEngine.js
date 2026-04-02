@@ -5,8 +5,10 @@ import { TimeService } from '../services/TimeService';
 import { NotificationService } from '../services/NotificationService'; 
 import { calculateEarnedHearts } from '../utils/gameLogic';
 import { getDistanceFromLatLonInKm } from '../utils/locationUtils';
-import { GameRules } from '../constants/GameRules';
+import { GameRules } from '../constants/GameRules'; 
 import { Config } from '../constants/Config';
+
+const NEED_MESSAGES = { 1: "Hunger! 🍎", 2: "Durst! 🥤", 3: "Streichel mich! ✋", 4: "Dreckig! 🧼", 5: "Rede mit mir! 💬" };
 
 export function useGameEngine(showDialog) {
   const [count, setCount] = React.useState(0);
@@ -16,17 +18,25 @@ export function useGameEngine(showDialog) {
   const [rewardEvent, setRewardEvent] = React.useState({ id: 0, amount: 0, isPenalty: false });
   const [isAppReady, setIsAppReady] = React.useState(false);
   const [activeNeed, setActiveNeed] = React.useState(null);
-  const [forceRefresh, setForceRefresh] = React.useState(0); 
   const [isOverdue, setIsOverdue] = React.useState(false);
   const [isJetlagged, setIsJetlagged] = React.useState(false);
   const [adaptedLocation, setAdaptedLocation] = React.useState(null); 
   const [debugInfo, setDebugInfo] = React.useState(""); 
+  const [forceRefresh, setForceRefresh] = React.useState(0);
 
   const [isSleeping, setIsSleeping] = React.useState(() => {
     return TimeService.isMixerSleeping(new Date().getHours());
   });
 
   const isNeedActive = activeNeed && Date.now() >= activeNeed.timestamp;
+
+  React.useEffect(() => {
+    if (activeNeed && !isNeedActive) {
+      const delay = Math.max(activeNeed.timestamp - Date.now(), 0);
+      const timer = setTimeout(() => setForceRefresh(p => p + 1), delay + 100);
+      return () => clearTimeout(timer);
+    }
+  }, [activeNeed, isNeedActive]);
 
   React.useEffect(() => {
     const timer = setInterval(() => {
@@ -38,27 +48,69 @@ export function useGameEngine(showDialog) {
   }, [isSleeping]);
 
   React.useEffect(() => {
+    let timer;
+    if (activeNeed && isNeedActive) {
+      const timeSinceNeed = Date.now() - activeNeed.timestamp;
+      const penaltyThreshold = Config.NEED_CONFIG.PENALTY_AFTER;
+      if (timeSinceNeed >= penaltyThreshold) setIsOverdue(true); 
+      else {
+        setIsOverdue(false);
+        timer = setTimeout(() => setIsOverdue(true), penaltyThreshold - timeSinceNeed);
+      }
+    } else setIsOverdue(false);
+    return () => { if (timer) clearTimeout(timer); };
+  }, [activeNeed, isNeedActive]);
+
+  React.useEffect(() => {
     if (isJetlagged && isSleeping && currentLocation.lat !== 0) {
       setIsJetlagged(false); 
-      const newAdaptation = { lat: currentLocation.lat, lon: currentLocation.lon };
-      setAdaptedLocation(newAdaptation);
-      StorageService.saveAdaptedLocation(newAdaptation);
+      const loc = { lat: currentLocation.lat, lon: currentLocation.lon };
+      setAdaptedLocation(loc);
+      StorageService.saveAdaptedLocation(loc);
     }
   }, [isJetlagged, isSleeping, currentLocation.lat, currentLocation.lon]);
 
-  const performJetlagCheck = async () => {
-    const baseLat = adaptedLocation ? adaptedLocation.lat : userData.lat;
-    const baseLon = adaptedLocation ? adaptedLocation.lon : userData.lon;
-    if (baseLat !== 0 && currentLocation.lat !== 0) {
-      const result = await TimeService.checkJetlag(currentLocation.lat, currentLocation.lon, baseLat, baseLon);
-      setIsJetlagged(result.isJetlagged);
-      const baseMode = adaptedLocation ? "Adaptiert" : "Heimat";
-      setDebugInfo(`${baseMode} | Diff: ${result.diff}h | Tol: ${result.tolerance}h`);
-    }
-  };
+  const calculateAwakeTrigger = React.useCallback((delayMs) => {
+    const now = new Date();
+    let triggerTime = new Date(now.getTime() + delayMs);
+    const start = parseInt(Config.NIGHT_MODE_START.split(':')[0]);
+    const end = parseInt(Config.NIGHT_MODE_END.split(':')[0]);
+    const hr = triggerTime.getHours();
+    if (start > end) {
+      if (hr >= start || hr < end) {
+        triggerTime.setHours(end, 0, 0, 0); 
+        if (hr >= start) triggerTime.setDate(triggerTime.getDate() + 1);
+      }
+    } else if (hr >= start && hr < end) triggerTime.setHours(end, 0, 0, 0);
+    return triggerTime;
+  }, []);
+
+  const generateRandomNeed = React.useCallback(async () => {
+    if (isSleeping || (userData.lat === 0 && userData.lon === 0)) return;
+    const toolIds = [1, 2, 3, 4, 5];
+    const tool = toolIds[Math.floor(Math.random() * toolIds.length)];
+    const delay = Math.random() * (Config.NEED_CONFIG.NEXT_NEED_DELAY_MAX - Config.NEED_CONFIG.NEXT_NEED_DELAY_MIN) + Config.NEED_CONFIG.NEXT_NEED_DELAY_MIN;
+    const trigger = calculateAwakeTrigger(delay);
+    const need = { toolId: tool, timestamp: trigger.getTime() };
+    setActiveNeed(need);
+    await StorageService.saveActiveNeed(need);
+  }, [isSleeping, userData.lat, userData.lon, calculateAwakeTrigger]);
 
   React.useEffect(() => {
-    performJetlagCheck();
+    if (isAppReady && !activeNeed && !isSleeping && userData.lat !== 0) generateRandomNeed();
+  }, [isAppReady, activeNeed, isSleeping, userData.lat, generateRandomNeed]);
+
+  React.useEffect(() => {
+    const check = async () => {
+      const baseLat = adaptedLocation ? adaptedLocation.lat : userData.lat;
+      const baseLon = adaptedLocation ? adaptedLocation.lon : userData.lon;
+      if (baseLat !== 0 && currentLocation.lat !== 0) {
+        const res = await TimeService.checkJetlag(currentLocation.lat, currentLocation.lon, baseLat, baseLon);
+        setIsJetlagged(res.isJetlagged);
+        setDebugInfo(`${adaptedLocation ? "Adaptiert" : "Heimat"} | Diff: ${res.diff}h | Tol: ${res.tolerance}h`);
+      }
+    };
+    check();
   }, [userData.lat, userData.lon, currentLocation.lat, currentLocation.lon, adaptedLocation]);
 
   React.useEffect(() => {
@@ -66,55 +118,61 @@ export function useGameEngine(showDialog) {
       const data = await StorageService.loadGameData();
       setCount(data.punktestand);
       setLogbook(data.logbook || []);
-      setActiveNeed(data.activeNeed);
       if (data.userData) setUserData(data.userData);
+      if (data.activeNeed) setActiveNeed(data.activeNeed);
       if (data.adaptedLocation) setAdaptedLocation(data.adaptedLocation);
-
-      const locResult = await LocationService.getCurrentLocationData();
-      if (locResult.success) {
-        setCurrentLocation({ city: locResult.city, lat: locResult.lat, lon: locResult.lon });
-        const timeData = await TimeService.getLocalTime(locResult.lat, locResult.lon);
-        setIsSleeping(TimeService.isMixerSleeping(timeData.hour));
-      }
+      const loc = await LocationService.getCurrentLocationData();
+      if (loc.success) setCurrentLocation({ city: loc.city, lat: loc.lat, lon: loc.lon });
       setIsAppReady(true);
     };
-    if (!isAppReady) init();
-  }, [isAppReady]);
+    init();
+  }, []);
 
-  const processInteraction = (activeTool) => {
-    if (isSleeping || !activeNeed || activeTool !== activeNeed.toolId) return { success: false };
-    const distance = getDistanceFromLatLonInKm(userData.lat, userData.lon, currentLocation.lat, currentLocation.lon);
-    const result = calculateEarnedHearts(activeTool, distance, GameRules.TOOL_BASE_POINTS, GameRules.DISTANCE_THRESHOLDS, activeNeed);
+  const processInteraction = (toolId) => {
+    if (isSleeping || !isNeedActive || toolId !== activeNeed.toolId) return { success: false };
+    const dist = getDistanceFromLatLonInKm(userData.lat, userData.lon, currentLocation.lat, currentLocation.lon);
+    const res = calculateEarnedHearts(toolId, dist, GameRules.TOOL_BASE_POINTS, GameRules.DISTANCE_THRESHOLDS, activeNeed);
+    const earned = res.earnedHearts;
+    
     setCount(prev => {
-      const newCount = prev + result.earnedHearts;
-      StorageService.savePunktestand(newCount); 
-      return newCount;
+      const val = prev + earned;
+      StorageService.savePunktestand(val);
+      return val;
     });
-    setRewardEvent({ id: Date.now(), amount: Math.abs(result.earnedHearts), isPenalty: result.isPenalty });
+
+    setRewardEvent({ id: Date.now() + Math.random(), amount: Math.max(Math.abs(earned), 5), isPenalty: res.isPenalty });
+
+    setLogbook(prev => {
+      let next;
+      const idx = prev.findIndex(e => e.city === currentLocation.city);
+      if (idx >= 0) {
+        next = [...prev];
+        next[idx] = { ...next[idx], count: next[idx].count + earned };
+      } else next = [...prev, { id: Date.now().toString(), city: currentLocation.city, count: earned }];
+      StorageService.saveLogbook(next);
+      return next;
+    });
+
     setActiveNeed(null);
     StorageService.saveActiveNeed(null);
-    return { success: true, isAtHome: result.isAtHome, isPenalty: result.isPenalty };
+    generateRandomNeed();
+    return { success: true, isAtHome: res.isAtHome, isPenalty: res.isPenalty, earnedHearts: earned };
   };
 
   return {
-    count, userData, currentLocation, rewardEvent, isAppReady, processInteraction, 
-    setUserData: async (newData) => {
-      setUserData(newData);
-      await StorageService.saveUserData(newData);
+    count, logbook, userData, currentLocation, rewardEvent, isAppReady, processInteraction, 
+    setUserData: async (d) => {
+      setUserData(d);
+      await StorageService.saveUserData(d);
+      setAdaptedLocation(null);
+      await StorageService.saveAdaptedLocation(null);
     },
     resetGame: async () => { 
-      // 1. Alle Speicher löschen
       await StorageService.resetGameData(); 
-      // 2. Alle States sofort auf Null
-      setCount(0);
-      setLogbook([]);
+      setCount(0); setLogbook([]); setAdaptedLocation(null); setIsJetlagged(false); setActiveNeed(null);
       setUserData({ name: Config.DEFAULT_USERNAME, address: '', lat: 0, lon: 0 });
-      setActiveNeed(null);
-      setIsJetlagged(false);
-      setAdaptedLocation(null);
-      setIsOverdue(false);
-      setDebugInfo("");
     }, 
-    isSleeping, activeNeed, isNeedActive, isOverdue, isJetlagged, debugInfo 
+    isSleeping, activeNeed, isNeedActive, isOverdue, isJetlagged, debugInfo,
+    activeNeedMessage: (isNeedActive && activeNeed) ? NEED_MESSAGES[activeNeed.toolId] : null
   };
 }

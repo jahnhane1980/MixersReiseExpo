@@ -55,12 +55,11 @@ export const StorageService = {
     } catch (error) {}
   },
 
-  // TOTAL RESET: Löscht alles ohne Ausnahme
   async resetGameData() {
     try {
       await AsyncStorage.clear();
     } catch (error) {
-      if (Config.DEBUG_MODE) console.error("StorageService: Fehler beim Reset:", error);
+      if (Config.DEBUG_MODE) console.error("StorageService: Reset fehlgeschlagen:", error);
     }
   }
 };

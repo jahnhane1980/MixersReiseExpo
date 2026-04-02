@@ -15,26 +15,22 @@ const toolImages = {
 export default function InteractiveArea({ onApplyTool, rewardEvent, activeTool, currentSpeech, activeNeed, isNeedActive, isSleeping, isOverdue, isJetlagged }) {
   const [heartList, setHeartList] = useState([]);
   const [isSad, setIsSad] = useState(false);
-  const prevEventId = useRef(rewardEvent?.id || 0);
+  const prevEventId = useRef(0);
   const { panHandlers, pan, snapScale, plushieScale, plushieOpacity } = usePlushieAnimation(onApplyTool);
 
   useEffect(() => {
-    if (rewardEvent && rewardEvent.id !== prevEventId.current && rewardEvent.amount > 0) {
+    if (rewardEvent && rewardEvent.id !== prevEventId.current) {
       const spawnCount = Math.min(rewardEvent.amount, 30);
-      const heartsToAdd = Array.from({ length: spawnCount }).map((_, i) => ({ 
-        id: `${rewardEvent.id}-${i}`, isPenalty: rewardEvent.isPenalty 
-      }));
-      setHeartList((prev) => [...prev, ...heartsToAdd]);
-      
+      const hearts = Array.from({ length: spawnCount }).map((_, i) => ({ id: `${rewardEvent.id}-${i}`, isPenalty: rewardEvent.isPenalty }));
+      setHeartList(prev => [...prev, ...hearts]);
       if (rewardEvent.isPenalty) {
         setIsSad(true);
-        setTimeout(() => setIsSad(false), 8000);
+        setTimeout(() => setIsSad(false), 5000);
       }
       prevEventId.current = rewardEvent.id;
     }
   }, [rewardEvent]);
 
-  // NEU: Jetlag-Bild hat Priorität über Traurigkeit und Schmutz
   const characterSource = isSleeping 
     ? require('../assets/mixer_sleeping.png')
     : isJetlagged
@@ -54,8 +50,8 @@ export default function InteractiveArea({ onApplyTool, rewardEvent, activeTool, 
       <View style={styles.plushieContainer}>
         <Animated.Image source={characterSource} style={[styles.plushieImage, { transform: [{ scale: plushieScale }], opacity: plushieOpacity }]} resizeMode="contain" />
         <View style={styles.particleLayer}>
-          {heartList.map((heart) => (
-            <HeartParticle key={heart.id} id={heart.id} isPenalty={heart.isPenalty} onComplete={(id) => setHeartList(prev => prev.filter(h => h.id !== id))} />
+          {heartList.map(h => (
+            <HeartParticle key={h.id} id={h.id} isPenalty={h.isPenalty} onComplete={id => setHeartList(prev => prev.filter(p => p.id !== id))} />
           ))}
         </View>
       </View>
@@ -75,7 +71,7 @@ const styles = StyleSheet.create({
   bubbleTail: { position: 'absolute', bottom: -10, left: '50%', marginLeft: -10, width: 0, height: 0, borderLeftWidth: 10, borderRightWidth: 10, borderTopWidth: 10, borderTopColor: Theme.colors.primaryBrown, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
   plushieContainer: { marginTop: 320, position: 'relative' },
   plushieImage: { width: Theme.layout.plushieWidth, height: Theme.layout.plushieHeight },
-  particleLayer: { position: 'absolute', top: -50, left: 80, width: 40, height: 40 },
+  particleLayer: { position: 'absolute', top: -100, left: 80, width: 40, height: 40 },
   draggableTool: { position: 'absolute', bottom: 10, left: '50%', marginLeft: -56, zIndex: 10 },
   toolIcon: { width: 112, height: 112, resizeMode: 'contain' }
 });
