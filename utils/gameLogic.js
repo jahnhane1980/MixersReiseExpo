@@ -5,7 +5,7 @@ export const calculateEarnedHearts = (activeTool, distance, basePointsMap, thres
   let timeFactor = 1.0;
   let isPenalty = false;
 
-  // 1. Zeitliche Abwertung (unverändert)
+  // 1. Zeitliche Abwertung
   if (activeNeed && activeNeed.timestamp) {
     const elapsed = Date.now() - activeNeed.timestamp;
     const { FULL_POINTS_UNTIL, DECAY_UNTIL, PENALTY_AFTER, MIN_MULTIPLIER } = Config.NEED_CONFIG;
@@ -26,7 +26,12 @@ export const calculateEarnedHearts = (activeTool, distance, basePointsMap, thres
   const isActuallyAtHome = distance < 0.05 && accuracy < 50;
 
   if (isActuallyAtHome) {
-    const hearts = Math.floor(basePoints * 0.5 * timeFactor);
+    // Geändert: const -> let für Sicherheits-Logik
+    let hearts = Math.floor(basePoints * 0.5 * timeFactor);
+    
+    // Sicherheit: Mindestens 1 Herz sicherstellen, sofern keine Strafe vorliegt
+    if (!isPenalty && hearts < 1) hearts = 1;
+
     return {
       earnedHearts: hearts,
       multiplier: 0.5,
@@ -36,14 +41,18 @@ export const calculateEarnedHearts = (activeTool, distance, basePointsMap, thres
     };
   }
 
-  // 3. Distanz-Multiplikator (unverändert)
+  // 3. Distanz-Multiplikator
   let distMultiplier = 1;
   const thresholdMatch = thresholds.find(t => distance >= t.minKm);
   if (thresholdMatch) {
     distMultiplier = thresholdMatch.multiplier;
   }
 
-  const finalHearts = Math.floor(basePoints * distMultiplier * timeFactor);
+  // Geändert: const -> let für Sicherheits-Logik
+  let finalHearts = Math.floor(basePoints * distMultiplier * timeFactor);
+
+  // Sicherheit: Mindestens 1 Herz sicherstellen, sofern keine Strafe vorliegt
+  if (!isPenalty && finalHearts < 1) finalHearts = 1;
 
   return {
     earnedHearts: finalHearts,
