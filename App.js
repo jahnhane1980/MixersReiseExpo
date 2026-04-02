@@ -24,12 +24,20 @@ export default function App() {
 
   const getSpeechText = () => {
     if (interactionSpeech) return interactionSpeech; 
+    
     if (Config.DEBUG_MODE) {
       const need = engine.activeNeed ? `Need: ${engine.activeNeed.toolId} (${engine.isNeedActive ? 'AKTIV' : 'WARTET'})` : 'Need: keines';
       return `Jetlag: ${engine.isJetlagged ? 'JA' : 'NEIN'} | Schlaf: ${engine.isSleeping ? 'JA' : 'NEIN'}\n${need}\n${engine.debugInfo}`;
     }
+
+    if (engine.isSleeping) return null; 
     if (engine.isJetlagged) return "Uff, mir brummt der Kopf! 😵‍💫";
     if (engine.isNeedActive && engine.activeNeedMessage) return engine.activeNeedMessage;
+    
+    if (!engine.isNeedActive && engine.isAppReady) {
+      return "Ich ruhe mich gerade aus... 😊";
+    }
+    
     return null;
   };
 
@@ -40,17 +48,33 @@ export default function App() {
         setActiveTool(null);
         setInteractionSpeech(res.isPenalty ? "Das hat aber lange gedauert... 😢" : "Danke schön! ✨");
         setTimeout(() => setInteractionSpeech(null), 5000);
+      } else {
+        // KORREKTUR: Ablehnung der Anwendung in Ruhephasen
+        setActiveTool(null);
+        if (!engine.isNeedActive) {
+          setInteractionSpeech("Das ist lieb, aber ich bin gerade wunschlos glücklich! 😊");
+        } else {
+          setInteractionSpeech("Das brauche ich gerade nicht! 🐴");
+        }
+        setTimeout(() => setInteractionSpeech(null), 4000);
       }
     }
   };
 
   const handleSelectTool = (id) => {
     if (engine.isSleeping) return;
-    if (engine.isNeedActive && id !== engine.activeNeed.toolId) {
-      showDialog("Mixer sagt:", "Das brauche ich gerade nicht! Schau mal, was ich wirklich will.");
-      return;
+    
+    if (id === 5) {
+      // Spezielle Logik für das Gesprächs-Tool
+      if (engine.isNeedActive && engine.activeNeed.toolId === 5) {
+        setQuestionVisible(true);
+      } else {
+        setInteractionSpeech("Ich möchte gerade lieber nicht reden. 😊");
+        setTimeout(() => setInteractionSpeech(null), 3000);
+      }
+    } else {
+      setActiveTool(id);
     }
-    if (id === 5) setQuestionVisible(true); else setActiveTool(id);
   };
 
   const handleDialogueSelection = (item) => {
@@ -67,8 +91,24 @@ export default function App() {
   return (
     <SafeAreaView style={styles.container}>
       <TopBar count={engine.count} onOpenSettings={() => setSettingsVisible(true)} onOpenInfo={() => setInfoVisible(true)} />
-      <InteractiveArea rewardEvent={engine.rewardEvent} onApplyTool={handleAction} activeTool={activeTool} currentSpeech={getSpeechText()} activeNeed={engine.activeNeed} isNeedActive={engine.isNeedActive} isSleeping={engine.isSleeping} isJetlagged={engine.isJetlagged} />
-      <BottomToolbar activeTool={activeTool} onSelectTool={handleSelectTool} activeNeed={engine.activeNeed} isNeedActive={engine.isNeedActive} />
+      <InteractiveArea 
+        rewardEvent={engine.rewardEvent} 
+        onApplyTool={handleAction} 
+        activeTool={activeTool} 
+        currentSpeech={getSpeechText()} 
+        activeNeed={engine.activeNeed} 
+        isNeedActive={engine.isNeedActive} 
+        isSleeping={engine.isSleeping} 
+        isJetlagged={engine.isJetlagged} 
+      />
+      <BottomToolbar 
+        activeTool={activeTool} 
+        onSelectTool={handleSelectTool} 
+        activeNeed={engine.activeNeed} 
+        isNeedActive={engine.isNeedActive} 
+        isSleeping={engine.isSleeping}
+      />
+      
       {needsAddress && !isSettingsVisible && engine.isAppReady && (
         <View style={styles.addressLock}>
           <Text style={styles.addressLockTitle}>🏠 Willkommen!</Text>
@@ -78,6 +118,7 @@ export default function App() {
           </TouchableOpacity>
         </View>
       )}
+      
       <DiscoveryModal visible={isInfoVisible} onClose={() => setInfoVisible(false)} logbookData={engine.logbook} />
       <SettingsModal visible={isSettingsVisible} currentUserData={engine.userData} onClose={() => setSettingsVisible(false)} onSave={engine.setUserData} showDialog={showDialog} onReset={() => { engine.resetGame(); setSettingsVisible(false); showDialog("Reset", "Alles auf Null gesetzt!"); }} />
       <QuestionModal visible={isQuestionVisible} onClose={() => setQuestionVisible(false)} onSelectQuestion={handleDialogueSelection} />
