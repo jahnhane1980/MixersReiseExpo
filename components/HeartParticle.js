@@ -30,7 +30,7 @@ export default function HeartParticle({ id, isPenalty, onComplete }) {
 
   return (
     <Animated.Text style={[styles.particle, { transform: [{ translateY }, { scale }], opacity }]}>
-      {isPenalty ? '💔' : '❤️'}
+      {isPenalty ? '🖤' : '❤️'}
     </Animated.Text>
   );
 }

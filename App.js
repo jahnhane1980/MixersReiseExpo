@@ -99,7 +99,8 @@ export default function App() {
         activeNeed={engine.activeNeed} 
         isNeedActive={engine.isNeedActive} 
         isSleeping={engine.isSleeping} 
-        isJetlagged={engine.isJetlagged} 
+        isJetlagged={engine.isJetlagged}
+        isOverdue={engine.isOverdue} 
       />
       <BottomToolbar 
         activeTool={activeTool} 

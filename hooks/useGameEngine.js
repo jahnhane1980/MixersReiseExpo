@@ -58,6 +58,21 @@ export function useGameEngine(showDialog) {
   const homeLon = userData?.lon || 0;
   const isNeedActive = activeNeed && activeNeed.timestamp && Date.now() >= activeNeed.timestamp;
 
+  // Hilfsfunktion zum Planen der Notification
+  const scheduleOverdueNotification = (need) => {
+    if (!need) return;
+    const overdueTimestamp = need.timestamp + Config.NEED_CONFIG.PENALTY_AFTER;
+    const secondsUntilOverdue = (overdueTimestamp - Date.now()) / 1000;
+    
+    if (secondsUntilOverdue > 0) {
+      NotificationService.scheduleReminder(
+        secondsUntilOverdue, 
+        "Mixer ist traurig!", 
+        `Du hast dich zu lange nicht um das Bedürfnis "${NEED_MESSAGES[need.toolId]}" gekümmert.`
+      );
+    }
+  };
+
   // --- AUTOMATISCHE SPEICHERUNG ---
   React.useEffect(() => {
     if (isAppReady) StorageService.savePunktestand(count);
@@ -128,6 +143,9 @@ export function useGameEngine(showDialog) {
   React.useEffect(() => {
     const init = async () => {
       try {
+        // Notification Berechtigungen beim Start anfragen
+        await NotificationService.requestPermissions();
+
         const data = await StorageService.loadGameData();
         setCount(data.punktestand || 0);
         setLogbook(data.logbook || []);
@@ -147,6 +165,8 @@ export function useGameEngine(showDialog) {
             await StorageService.saveActiveNeed(need);
           }
           setActiveNeed(need);
+          // Notification neu planen falls nötig
+          scheduleOverdueNotification(need);
         }
 
         if (data.adaptedLocation) setAdaptedLocation(data.adaptedLocation);
@@ -183,6 +203,9 @@ export function useGameEngine(showDialog) {
     
     setActiveNeed(need);
     await StorageService.saveActiveNeed(need);
+    
+    // Notification für dieses Bedürfnis planen
+    scheduleOverdueNotification(need);
   }, [isSleeping, homeLat, homeLon]);
 
   // Automatischer Start der Bedürfnisse, sobald die App bereit ist und ein Heimatort existiert
@@ -232,6 +255,9 @@ export function useGameEngine(showDialog) {
       return [...prev, { id: Date.now().toString(), city: currentLocation.city, count: earned }];
     });
 
+    // Benachrichtigungen löschen, da Bedürfnis erfüllt
+    NotificationService.cancelReminders();
+
     setActiveNeed(null);
     StorageService.saveActiveNeed(null);
     generateRandomNeed();
@@ -254,6 +280,7 @@ export function useGameEngine(showDialog) {
     },
     resetGame: async () => { 
       await StorageService.resetGameData(); 
+      NotificationService.cancelReminders();
       setCount(0); setLogbook([]); setAdaptedLocation(null); setIsJetlagged(false); setActiveNeed(null);
       setUserData({ name: Config.DEFAULT_USERNAME, address: '', lat: 0, lon: 0 });
     }, 
