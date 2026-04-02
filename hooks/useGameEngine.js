@@ -15,6 +15,25 @@ const NEED_MESSAGES = {
   5: "Rede mit mir! 💬" 
 };
 
+// 1. EXTRAKTION: Diese Funktion ist jetzt statisch und stabil außerhalb des Hooks.
+const calculateAwakeTrigger = (delayMs) => {
+  const now = new Date();
+  let triggerTime = new Date(now.getTime() + delayMs);
+  const start = parseInt(Config.NIGHT_MODE_START.split(':')[0]);
+  const end = parseInt(Config.NIGHT_MODE_END.split(':')[0]);
+  const hr = triggerTime.getHours();
+  
+  if (start > end) {
+    if (hr >= start || hr < end) {
+      triggerTime.setHours(end, 0, 0, 0); 
+      if (hr >= start) triggerTime.setDate(triggerTime.getDate() + 1);
+    }
+  } else if (hr >= start && hr < end) {
+    triggerTime.setHours(end, 0, 0, 0);
+  }
+  return triggerTime;
+};
+
 export function useGameEngine(showDialog) {
   const [count, setCount] = React.useState(0);
   const [logbook, setLogbook] = React.useState([]);
@@ -35,18 +54,14 @@ export function useGameEngine(showDialog) {
 
   const isNeedActive = activeNeed && Date.now() >= activeNeed.timestamp;
 
-  // --- PERSISTENZ-EFFEKTE (React 19 konform) ---
+  // --- PERSISTENZ-EFFEKTE ---
   
   React.useEffect(() => {
-    if (isAppReady) {
-      StorageService.savePunktestand(count);
-    }
+    if (isAppReady) StorageService.savePunktestand(count);
   }, [count, isAppReady]);
 
   React.useEffect(() => {
-    if (isAppReady && logbook.length > 0) {
-      StorageService.saveLogbook(logbook);
-    }
+    if (isAppReady && logbook.length > 0) StorageService.saveLogbook(logbook);
   }, [logbook, isAppReady]);
 
   // --- GAME-LOGIK EFFEKTE ---
@@ -91,30 +106,30 @@ export function useGameEngine(showDialog) {
     }
   }, [isJetlagged, isSleeping, currentLocation.lat, currentLocation.lon]);
 
-  // --- STANDORT & JETLAG (Mit Error-Boundary) ---
+  // --- JETLAG-CHECK (Optimierte Abhängigkeiten) ---
+  
+  // Wir extrahieren die benötigten Koordinaten, damit der Effekt nicht auf das ganze userData-Objekt reagiert
+  const homeLat = userData.lat;
+  const homeLon = userData.lon;
 
   React.useEffect(() => {
     const check = async () => {
-      const baseLat = adaptedLocation ? adaptedLocation.lat : userData.lat;
-      const baseLon = adaptedLocation ? adaptedLocation.lon : userData.lon;
+      const baseLat = adaptedLocation ? adaptedLocation.lat : homeLat;
+      const baseLon = adaptedLocation ? adaptedLocation.lon : homeLon;
       
       if (baseLat !== 0 && currentLocation.lat !== 0) {
         const res = await TimeService.checkJetlag(currentLocation.lat, currentLocation.lon, baseLat, baseLon);
-        
         if (res.success) {
           setIsJetlagged(res.isJetlagged);
           setDebugInfo(`${adaptedLocation ? "Adaptiert" : "Heimat"} | Diff: ${res.diff}h | Tol: ${res.tolerance}h`);
         } else {
           setIsJetlagged(false); 
           setDebugInfo("⚠️ Zeit-API nicht erreichbar");
-          if (Config.DEBUG_MODE) {
-            showDialog("Verbindungsfehler", "Jetlag-Prüfung vorübergehend deaktiviert (API-Fehler).");
-          }
         }
       }
     };
     check();
-  }, [userData.lat, userData.lon, currentLocation.lat, currentLocation.lon, adaptedLocation]);
+  }, [homeLat, homeLon, currentLocation.lat, currentLocation.lon, adaptedLocation]);
 
   // --- INITIALISIERUNG ---
 
@@ -126,67 +141,52 @@ export function useGameEngine(showDialog) {
       if (data.userData) setUserData(data.userData);
       if (data.activeNeed) setActiveNeed(data.activeNeed);
       if (data.adaptedLocation) setAdaptedLocation(data.adaptedLocation);
-      
       const loc = await LocationService.getCurrentLocationData();
       if (loc.success) setCurrentLocation({ city: loc.city, lat: loc.lat, lon: loc.lon });
-      
       setIsAppReady(true);
     };
     init();
   }, []);
 
-  // --- HELFER-FUNKTIONEN ---
-
-  const calculateAwakeTrigger = React.useCallback((delayMs) => {
-    const now = new Date();
-    let triggerTime = new Date(now.getTime() + delayMs);
-    const start = parseInt(Config.NIGHT_MODE_START.split(':')[0]);
-    const end = parseInt(Config.NIGHT_MODE_END.split(':')[0]);
-    const hr = triggerTime.getHours();
-    if (start > end) {
-      if (hr >= start || hr < end) {
-        triggerTime.setHours(end, 0, 0, 0); 
-        if (hr >= start) triggerTime.setDate(triggerTime.getDate() + 1);
-      }
-    } else if (hr >= start && hr < end) triggerTime.setHours(end, 0, 0, 0);
-    return triggerTime;
-  }, []);
+  // --- BEDÜRFNIS-LOGIK (Optimiert) ---
 
   const generateRandomNeed = React.useCallback(async () => {
-    if (isSleeping || (userData.lat === 0 && userData.lon === 0)) return;
+    // Nutzt homeLat/homeLon statt des ganzen userData Objekts
+    if (isSleeping || (homeLat === 0 && homeLon === 0)) return;
+    
     const toolIds = [1, 2, 3, 4, 5];
     const tool = toolIds[Math.floor(Math.random() * toolIds.length)];
     const delay = Math.random() * (Config.NEED_CONFIG.NEXT_NEED_DELAY_MAX - Config.NEED_CONFIG.NEXT_NEED_DELAY_MIN) + Config.NEED_CONFIG.NEXT_NEED_DELAY_MIN;
-    const trigger = calculateAwakeTrigger(delay);
+    
+    const trigger = calculateAwakeTrigger(delay); // Nutzt die externe Funktion
     const need = { toolId: tool, timestamp: trigger.getTime() };
+    
     setActiveNeed(need);
     await StorageService.saveActiveNeed(need);
-  }, [isSleeping, userData.lat, userData.lon, calculateAwakeTrigger]);
+  }, [isSleeping, homeLat, homeLon]); // Viel stabilere Abhängigkeiten
 
   React.useEffect(() => {
-    if (isAppReady && !activeNeed && !isSleeping && userData.lat !== 0) generateRandomNeed();
-  }, [isAppReady, activeNeed, isSleeping, userData.lat, generateRandomNeed]);
+    if (isAppReady && !activeNeed && !isSleeping && homeLat !== 0) {
+      generateRandomNeed();
+    }
+  }, [isAppReady, activeNeed, isSleeping, homeLat, generateRandomNeed]);
 
   // --- INTERAKTION ---
 
   const processInteraction = (toolId) => {
     if (!isAppReady || isSleeping || !isNeedActive || toolId !== activeNeed.toolId) return { success: false };
     
-    const dist = getDistanceFromLatLonInKm(userData.lat, userData.lon, currentLocation.lat, currentLocation.lon);
+    const dist = getDistanceFromLatLonInKm(homeLat, homeLon, currentLocation.lat, currentLocation.lon);
     const res = calculateEarnedHearts(toolId, dist, GameRules.TOOL_BASE_POINTS, GameRules.DISTANCE_THRESHOLDS, activeNeed);
     const earned = res.earnedHearts;
     
-    // Reiner State-Update für React 19
     setCount(prev => prev + earned);
-
-    // Belohnungs-Event (Visualisierung)
     setRewardEvent({ 
       id: Date.now() + Math.random(), 
       amount: Math.abs(earned) || 1, 
       isPenalty: res.isPenalty 
     });
 
-    // Logbuch-Update
     setLogbook(prev => {
       const idx = prev.findIndex(e => e.city === currentLocation.city);
       if (idx >= 0) {
