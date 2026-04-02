@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Modal, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Modal, Text, TouchableOpacity, Platform } from 'react-native'; // Platform hinzugefügt
 import { Picker } from '@react-native-picker/picker';
 import { Theme } from '../constants/Theme';
 import { Dialogues } from '../constants/Dialogues';
@@ -79,11 +79,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Theme.colors.borderLight,
     marginBottom: Theme.spacing.large,
-    overflow: 'hidden',
+    // FIX für iOS: Das Rad braucht deutlich mehr Platz und darf nicht abgeschnitten werden.
+    overflow: Platform.OS === 'ios' ? 'visible' : 'hidden',
+    height: Platform.OS === 'ios' ? 220 : 50,
   },
   picker: {
     width: '100%',
-    height: 50,
+    // FIX für iOS: Die innere Komponente bekommt ebenfalls den nötigen Platz
+    height: Platform.OS === 'ios' ? 210 : 50,
   },
   buttonRow: {
     flexDirection: 'row',

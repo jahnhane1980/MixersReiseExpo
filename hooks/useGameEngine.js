@@ -67,7 +67,6 @@ export function useGameEngine(showDialog) {
   }, []);
 
   const generateRandomNeed = React.useCallback(async (lastToolId = null) => {
-    // Wenn Geodaten fehlen, generieren wir keine Bedürfnisse (App ist gelockt)
     if (isSleeping || (userData.lat === 0 && userData.lon === 0)) return;
 
     const toolIds = [1, 2, 3, 4, 5];
@@ -89,6 +88,13 @@ export function useGameEngine(showDialog) {
     await NotificationService.scheduleReminder(secondsToTrigger, "Mixer", messages[randomTool]);
   }, [isSleeping, calculateAwakeTrigger, userData]);
 
+  // Kickstarter: Startet Bedürfnisse, sobald Geodaten vorhanden sind
+  React.useEffect(() => {
+    if (isAppReady && !activeNeed && !isSleeping && userData.lat !== 0 && userData.lon !== 0) {
+      generateRandomNeed();
+    }
+  }, [isAppReady, activeNeed, isSleeping, userData.lat, userData.lon, generateRandomNeed]);
+
   React.useEffect(() => {
     const init = async () => {
       const data = await StorageService.loadGameData();
@@ -105,21 +111,12 @@ export function useGameEngine(showDialog) {
       }
 
       setIsAppReady(true);
-      
-      // Nutzt direkt die Daten aus dem Speicher, um Abhängigkeitsprobleme mit userData zu umgehen
-      if (!data.activeNeed && !TimeService.isMixerSleeping(new Date().getHours())) {
-        if (data.userData?.lat !== 0 && data.userData?.lon !== 0) {
-            generateRandomNeed();
-        }
-      }
     };
     
-    // Verhindert, dass init() noch mal läuft, wenn sich States ändern
     if (!isAppReady) {
       init();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // <-- Das leere Array sorgt dafür, dass dieser Code nur ein einziges Mal beim App-Start ausgeführt wird.
+  }, [isAppReady]);
 
   const processInteraction = (activeTool) => {
     if (isSleeping || !isNeedActive || activeTool !== activeNeed.toolId) return { success: false };
@@ -128,17 +125,27 @@ export function useGameEngine(showDialog) {
     const result = calculateEarnedHearts(activeTool, distance, GameRules.TOOL_BASE_POINTS, GameRules.DISTANCE_THRESHOLDS, activeNeed);
     
     const earned = result.earnedHearts;
-    setCount(prev => prev + earned);
+    
+    setCount(prev => {
+      const newCount = prev + earned;
+      StorageService.savePunktestand(newCount); 
+      return newCount;
+    });
+
     setRewardEvent({ id: Date.now(), amount: earned });
 
     setLogbook(prev => {
+      let nextLogbook;
       const idx = prev.findIndex(e => e.city === currentLocation.city);
       if (idx >= 0) {
         const next = [...prev];
         next[idx] = { ...next[idx], count: next[idx].count + earned };
-        return next;
+        nextLogbook = next;
+      } else {
+        nextLogbook = [...prev, { id: Date.now().toString(), city: currentLocation.city, count: earned }];
       }
-      return [...prev, { id: Date.now().toString(), city: currentLocation.city, count: earned }];
+      StorageService.saveLogbook(nextLogbook); 
+      return nextLogbook;
     });
 
     const lastId = activeNeed.toolId;
@@ -160,11 +167,14 @@ export function useGameEngine(showDialog) {
     processInteraction, 
     setUserData, 
     resetGame: async () => { 
+      // FIX: Setzt nun auch alle Benutzerdaten im State zurück
       setCount(0); 
       setLogbook([]); 
       setActiveNeed(null); 
+      setUserData({ name: Config.DEFAULT_USERNAME, address: '', lat: 0, lon: 0 }); 
+      
       await StorageService.saveActiveNeed(null); 
-      await StorageService.resetGameData(); 
+      await StorageService.resetGameData(); // Löscht den kompletten Key aus AsyncStorage
     }, 
     isSleeping, 
     activeNeed, 

@@ -14,7 +14,7 @@ NEED_CONFIG: {
     MIN_MULTIPLIER: 0.2,               
     
     // Neue Intervalle: Min 20 Min, Max 1 Std.
-    NEXT_NEED_DELAY_MIN: 20 * 60 * 1000, // 20 Min.
-    NEXT_NEED_DELAY_MAX: 60 * 60 * 1000   // 1 Std.
+    NEXT_NEED_DELAY_MIN: 5000,//20 * 60 * 1000, // 20 Min.
+    NEXT_NEED_DELAY_MAX: 5000 //60 * 60 * 1000   // 1 Std.
   }
 };
