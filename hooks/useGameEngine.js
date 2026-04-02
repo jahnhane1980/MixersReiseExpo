@@ -2,14 +2,21 @@ import * as React from 'react';
 import { StorageService } from '../services/StorageService';
 import { LocationService } from '../services/LocationService';
 import { TimeService } from '../services/TimeService';
+import { NotificationService } from '../services/NotificationService'; // Wieder enthalten
 import { calculateEarnedHearts } from '../utils/gameLogic';
 import { getDistanceFromLatLonInKm } from '../utils/locationUtils';
 import { GameRules } from '../constants/GameRules'; 
 import { Config } from '../constants/Config';
 
-const NEED_MESSAGES = { 1: "Hunger! 🍎", 2: "Durst! 🥤", 3: "Streichel mich! ✋", 4: "Dreckig! 🧼", 5: "Rede mit mir! 💬" };
+const NEED_MESSAGES = { 
+  1: "Hunger! 🍎", 
+  2: "Durst! 🥤", 
+  3: "Streichel mich! ✋", 
+  4: "Dreckig! 🧼", 
+  5: "Rede mit mir! 💬" 
+};
 
-// Statische Hilfsfunktion für stabile Abhängigkeiten
+// Hilfsfunktion (außerhalb für Stabilität)
 const calculateAwakeTrigger = (delayMs) => {
   const now = new Date();
   let triggerTime = new Date(now.getTime() + delayMs);
@@ -47,7 +54,7 @@ export function useGameEngine(showDialog) {
   const homeLon = userData.lon;
   const isNeedActive = activeNeed && Date.now() >= activeNeed.timestamp;
 
-  // --- PERSISTENZ (Sichere Speicherung) ---
+  // --- AUTOMATISCHE SPEICHERUNG (React 19 Standard) ---
   React.useEffect(() => {
     if (isAppReady) StorageService.savePunktestand(count);
   }, [count, isAppReady]);
@@ -56,7 +63,7 @@ export function useGameEngine(showDialog) {
     if (isAppReady && logbook.length > 0) StorageService.saveLogbook(logbook);
   }, [logbook, isAppReady]);
 
-  // --- INTERVALL & STATUS CHECKS ---
+  // --- STATUS UPDATES ---
   React.useEffect(() => {
     if (activeNeed && !isNeedActive) {
       const delay = Math.max(activeNeed.timestamp - Date.now(), 0);
@@ -118,7 +125,6 @@ export function useGameEngine(showDialog) {
       if (data.activeNeed) {
         let need = data.activeNeed;
         const now = Date.now();
-        // Fairness-Check: Falls App zu war, Startzeit auf Jetzt setzen
         if (now > need.timestamp) {
           need = { ...need, timestamp: now };
           await StorageService.saveActiveNeed(need);
@@ -134,7 +140,7 @@ export function useGameEngine(showDialog) {
           city: loc.city, 
           lat: loc.lat, 
           lon: loc.lon, 
-          accuracy: loc.accuracy // KORREKTUR: Genauigkeit speichern
+          accuracy: loc.accuracy 
         });
       }
       setIsAppReady(true);
@@ -163,7 +169,6 @@ export function useGameEngine(showDialog) {
     
     const dist = getDistanceFromLatLonInKm(homeLat, homeLon, currentLocation.lat, currentLocation.lon);
     
-    // KORREKTUR: Übergabe der accuracy an die gameLogic
     const res = calculateEarnedHearts(
       toolId, 
       dist, 
@@ -174,7 +179,6 @@ export function useGameEngine(showDialog) {
     );
     
     const earned = res.earnedHearts;
-    
     setCount(prev => prev + earned);
 
     setRewardEvent({ 
