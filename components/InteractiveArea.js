@@ -12,75 +12,53 @@ const toolImages = {
   5: require('../assets/tool_talk.png'),
 };
 
-export default function InteractiveArea({ 
-  onApplyTool, 
-  rewardEvent, 
-  activeTool, 
-  currentSpeech, 
-  activeNeed, 
-  isNeedActive,
-  isSleeping // Neu: Prop empfangen
-}) {
+export default function InteractiveArea({ onApplyTool, rewardEvent, activeTool, currentSpeech, activeNeed, isNeedActive, isSleeping, isOverdue }) {
   const [heartList, setHeartList] = useState([]);
+  const [isSad, setIsSad] = useState(false);
   const prevEventId = useRef(rewardEvent?.id || 0);
-
   const { panHandlers, pan, snapScale, plushieScale, plushieOpacity } = usePlushieAnimation(onApplyTool);
 
   useEffect(() => {
     if (rewardEvent && rewardEvent.id !== prevEventId.current && rewardEvent.amount > 0) {
       const spawnCount = Math.min(rewardEvent.amount, 30);
-      const heartsToAdd = Array.from({ length: spawnCount }).map((_, i) => ({ id: `${rewardEvent.id}-${i}` }));
+      const heartsToAdd = Array.from({ length: spawnCount }).map((_, i) => ({ 
+        id: `${rewardEvent.id}-${i}`, isPenalty: rewardEvent.isPenalty 
+      }));
       setHeartList((prev) => [...prev, ...heartsToAdd]);
+      
+      if (rewardEvent.isPenalty) {
+        setIsSad(true);
+        setTimeout(() => setIsSad(false), 8000);
+      }
       prevEventId.current = rewardEvent.id;
     }
   }, [rewardEvent]);
 
-  // Bild-Priorität: 
-  // 1. Schlafen (Nachtmodus) 
-  // 2. Schmutzig (Bedarf Tool 4 aktiv)
-  // 3. Normal (Idle)
-  //
+  // NEU: Wenn isOverdue = true, ist Mixer sofort traurig, noch bevor interagiert wird
   const characterSource = isSleeping 
     ? require('../assets/mixer_sleeping.png')
-    : (isNeedActive && activeNeed?.toolId === 4)
-      ? require('../assets/mixer_dirty.png') 
-      : require('../assets/mixer_idle.png');
+    : (isSad || isOverdue) 
+      ? require('../assets/mixer_sad.png')
+      : (isNeedActive && activeNeed?.toolId === 4) ? require('../assets/mixer_dirty.png') : require('../assets/mixer_idle.png');
 
   return (
-    <ImageBackground 
-      source={require('../assets/bg_bedroom_plushies.png')} 
-      style={styles.mainArea}
-      resizeMode="cover" 
-      imageStyle={{ transform: [{ scale: 1.3 }] }} 
-    >
+    <ImageBackground source={require('../assets/bg_bedroom_plushies.png')} style={styles.mainArea} resizeMode="cover" imageStyle={{ transform: [{ scale: 1.3 }] }} >
       {currentSpeech && (
         <View style={styles.speechBubble}>
           <Text style={styles.speechText}>{currentSpeech}</Text>
           <View style={styles.bubbleTail} />
         </View>
       )}
-
       <View style={styles.plushieContainer}>
-        <Animated.Image 
-          source={characterSource} 
-          style={[styles.plushieImage, { transform: [{ scale: plushieScale }], opacity: plushieOpacity }]}
-          resizeMode="contain" 
-        />
-        
-        {/* overlay_drool wurde entfernt, da mixer_dirty.png den Zustand übernimmt */}
-
+        <Animated.Image source={characterSource} style={[styles.plushieImage, { transform: [{ scale: plushieScale }], opacity: plushieOpacity }]} resizeMode="contain" />
         <View style={styles.particleLayer}>
           {heartList.map((heart) => (
-            <HeartParticle key={heart.id} id={heart.id} onComplete={(id) => setHeartList(prev => prev.filter(h => h.id !== id))} />
+            <HeartParticle key={heart.id} id={heart.id} isPenalty={heart.isPenalty} onComplete={(id) => setHeartList(prev => prev.filter(h => h.id !== id))} />
           ))}
         </View>
       </View>
-
       {activeTool && (
-        <Animated.View
-          {...panHandlers}
-          style={[styles.draggableTool, { transform: [...pan.getTranslateTransform(), { scale: snapScale }] }]}
-        >
+        <Animated.View {...panHandlers} style={[styles.draggableTool, { transform: [...pan.getTranslateTransform(), { scale: snapScale }] }]} >
           <Image source={toolImages[activeTool]} style={styles.toolIcon} />
         </Animated.View>
       )}

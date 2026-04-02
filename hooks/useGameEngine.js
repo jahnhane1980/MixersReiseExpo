@@ -13,10 +13,11 @@ export function useGameEngine(showDialog) {
   const [logbook, setLogbook] = React.useState([]);
   const [userData, setUserData] = React.useState({ name: Config.DEFAULT_USERNAME, address: '', lat: 0, lon: 0 });
   const [currentLocation, setCurrentLocation] = React.useState({ city: 'Unbekannt', lat: 0, lon: 0 });
-  const [rewardEvent, setRewardEvent] = React.useState({ id: 0, amount: 0 });
+  const [rewardEvent, setRewardEvent] = React.useState({ id: 0, amount: 0, isPenalty: false });
   const [isAppReady, setIsAppReady] = React.useState(false);
   const [activeNeed, setActiveNeed] = React.useState(null);
   const [forceRefresh, setForceRefresh] = React.useState(0); 
+  const [isOverdue, setIsOverdue] = React.useState(false); // NEU: Flag für "zu lange gewartet"
 
   const [isSleeping, setIsSleeping] = React.useState(() => {
     return TimeService.isMixerSleeping(new Date().getHours());
@@ -45,10 +46,31 @@ export function useGameEngine(showDialog) {
     }
   }, [activeNeed, isNeedActive]);
 
+  // NEU: Der Live-Watcher für abgelaufene Zeit (Trauer-Modus VOR der Interaktion)
+  React.useEffect(() => {
+    let timer;
+    if (activeNeed && isNeedActive) {
+      const timeSinceNeed = Date.now() - activeNeed.timestamp;
+      const penaltyThreshold = Config.NEED_CONFIG.PENALTY_AFTER;
+
+      if (timeSinceNeed >= penaltyThreshold) {
+        setIsOverdue(true); // Direkt auf traurig setzen, wenn Zeit schon überschritten ist
+      } else {
+        setIsOverdue(false);
+        // Timer stellen, der exakt in dem Moment feuert, wenn das Limit erreicht wird
+        timer = setTimeout(() => {
+          setIsOverdue(true);
+        }, penaltyThreshold - timeSinceNeed);
+      }
+    } else {
+      setIsOverdue(false);
+    }
+    return () => { if (timer) clearTimeout(timer); };
+  }, [activeNeed, isNeedActive]);
+
   const calculateAwakeTrigger = React.useCallback((delayMs) => {
     const now = new Date();
     let triggerTime = new Date(now.getTime() + delayMs);
-    
     const startNight = parseInt(Config.NIGHT_MODE_START?.split(':')[0] || 22);
     const endNight = parseInt(Config.NIGHT_MODE_END?.split(':')[0] || 6);
     const hour = triggerTime.getHours();
@@ -84,11 +106,9 @@ export function useGameEngine(showDialog) {
 
     const messages = { 1: "Hunger! 🍎", 2: "Durst! 🥤", 3: "Streichel mich! ✋", 4: "Dreckig! 🧼", 5: "Rede mit mir! 💬" };
     const secondsToTrigger = Math.max((triggerTime.getTime() - Date.now()) / 1000, 1);
-    
     await NotificationService.scheduleReminder(secondsToTrigger, "Mixer", messages[randomTool]);
   }, [isSleeping, calculateAwakeTrigger, userData]);
 
-  // Kickstarter: Startet Bedürfnisse, sobald Geodaten vorhanden sind
   React.useEffect(() => {
     if (isAppReady && !activeNeed && !isSleeping && userData.lat !== 0 && userData.lon !== 0) {
       generateRandomNeed();
@@ -109,13 +129,9 @@ export function useGameEngine(showDialog) {
         const timeData = await TimeService.getLocalTime(locResult.lat, locResult.lon);
         setIsSleeping(TimeService.isMixerSleeping(timeData.hour));
       }
-
       setIsAppReady(true);
     };
-    
-    if (!isAppReady) {
-      init();
-    }
+    if (!isAppReady) init();
   }, [isAppReady]);
 
   const processInteraction = (activeTool) => {
@@ -132,7 +148,7 @@ export function useGameEngine(showDialog) {
       return newCount;
     });
 
-    setRewardEvent({ id: Date.now(), amount: earned });
+    setRewardEvent({ id: Date.now(), amount: Math.abs(earned), isPenalty: result.isPenalty });
 
     setLogbook(prev => {
       let nextLogbook;
@@ -151,33 +167,18 @@ export function useGameEngine(showDialog) {
     const lastId = activeNeed.toolId;
     setActiveNeed(null);
     StorageService.saveActiveNeed(null);
-    
     generateRandomNeed(lastId);
 
-    return { success: true, isAtHome: result.isAtHome };
+    return { success: true, isAtHome: result.isAtHome, isPenalty: result.isPenalty };
   };
 
   return {
-    count, 
-    logbook, 
-    userData, 
-    currentLocation, 
-    rewardEvent, 
-    isAppReady, 
-    processInteraction, 
-    setUserData, 
+    count, logbook, userData, currentLocation, rewardEvent, isAppReady, processInteraction, setUserData,
     resetGame: async () => { 
-      // FIX: Setzt nun auch alle Benutzerdaten im State zurück
-      setCount(0); 
-      setLogbook([]); 
-      setActiveNeed(null); 
-      setUserData({ name: Config.DEFAULT_USERNAME, address: '', lat: 0, lon: 0 }); 
-      
-      await StorageService.saveActiveNeed(null); 
-      await StorageService.resetGameData(); // Löscht den kompletten Key aus AsyncStorage
+      setCount(0); setLogbook([]); setActiveNeed(null); 
+      setUserData({ name: Config.DEFAULT_USERNAME, address: '', lat: 0, lon: 0 });
+      await StorageService.saveActiveNeed(null); await StorageService.resetGameData(); 
     }, 
-    isSleeping, 
-    activeNeed, 
-    isNeedActive
+    isSleeping, activeNeed, isNeedActive, isOverdue // NEU: exportiert
   };
 }
