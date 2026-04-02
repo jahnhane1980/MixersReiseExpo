@@ -16,7 +16,7 @@ const NEED_MESSAGES = {
   5: "Rede mit mir! 💬" 
 };
 
-// Statische Hilfsfunktion für stabile Abhängigkeiten
+// Statische Hilfsfunktion außerhalb des Hooks für maximale Stabilität
 const calculateAwakeTrigger = (delayMs) => {
   const now = new Date();
   let triggerTime = new Date(now.getTime() + delayMs);
@@ -53,9 +53,10 @@ export function useGameEngine(showDialog) {
     return TimeService.isMixerSleeping(new Date().getHours());
   });
 
-  const homeLat = userData.lat;
-  const homeLon = userData.lon;
-  const isNeedActive = activeNeed && Date.now() >= activeNeed.timestamp;
+  // Primitive Abhängigkeiten für stabile Effekte
+  const homeLat = userData?.lat || 0;
+  const homeLon = userData?.lon || 0;
+  const isNeedActive = activeNeed && activeNeed.timestamp && Date.now() >= activeNeed.timestamp;
 
   // --- AUTOMATISCHE SPEICHERUNG ---
   React.useEffect(() => {
@@ -98,18 +99,16 @@ export function useGameEngine(showDialog) {
     return () => { if (timer) clearTimeout(timer); };
   }, [activeNeed, isNeedActive]);
 
-  // KORREKTUR: Jetlag-Logik mit Schutz gegen Race-Conditions
+  // Jetlag-Logik mit Race-Condition-Schutz
   React.useEffect(() => {
-    let ignore = false; // Flag für veraltete Anfragen
-
+    let ignore = false;
     const check = async () => {
       const baseLat = adaptedLocation ? adaptedLocation.lat : homeLat;
       const baseLon = adaptedLocation ? adaptedLocation.lon : homeLon;
       
+      // Nur ausführen, wenn wir valide Heimat- und Standortdaten haben
       if (baseLat !== 0 && currentLocation.lat !== 0) {
         const res = await TimeService.checkJetlag(currentLocation.lat, currentLocation.lon, baseLat, baseLon);
-        
-        // Nur verarbeiten, wenn dies noch die aktuellste Anfrage ist
         if (!ignore) {
           if (res.success) {
             setIsJetlagged(res.isJetlagged);
@@ -122,64 +121,86 @@ export function useGameEngine(showDialog) {
       }
     };
     check();
-
-    return () => {
-      ignore = true; // Markiert die Anfrage als veraltet, falls sich Abhängigkeiten ändern
-    };
+    return () => { ignore = true; };
   }, [homeLat, homeLon, currentLocation.lat, currentLocation.lon, adaptedLocation]);
 
-  // --- INITIALISIERUNG ---
+  // --- INITIALISIERUNG MIT CRASH-SCHUTZ ---
   React.useEffect(() => {
     const init = async () => {
-      const data = await StorageService.loadGameData();
-      setCount(data.punktestand);
-      setLogbook(data.logbook || []);
-      if (data.userData) setUserData(data.userData);
-      
-      if (data.activeNeed) {
-        let need = data.activeNeed;
-        const now = Date.now();
-        if (now > need.timestamp) {
-          need = { ...need, timestamp: now };
-          await StorageService.saveActiveNeed(need);
+      try {
+        const data = await StorageService.loadGameData();
+        setCount(data.punktestand || 0);
+        setLogbook(data.logbook || []);
+        
+        // Validierung der geladenen UserData
+        if (data.userData && typeof data.userData.lat === 'number') {
+          setUserData(data.userData);
         }
-        setActiveNeed(need);
-      }
+        
+        // Validierung des geladenen Bedürfnisses (Vermeidung von undefined Crashes)
+        if (data.activeNeed && data.activeNeed.timestamp) {
+          let need = data.activeNeed;
+          const now = Date.now();
+          // Fairness-Logik
+          if (now > need.timestamp) {
+            need = { ...need, timestamp: now };
+            await StorageService.saveActiveNeed(need);
+          }
+          setActiveNeed(need);
+        }
 
-      if (data.adaptedLocation) setAdaptedLocation(data.adaptedLocation);
-      
-      const loc = await LocationService.getCurrentLocationData();
-      if (loc.success) {
-        setCurrentLocation({ 
-          city: loc.city, 
-          lat: loc.lat, 
-          lon: loc.lon, 
-          accuracy: loc.accuracy 
-        });
+        if (data.adaptedLocation) setAdaptedLocation(data.adaptedLocation);
+        
+        // Standort laden
+        const loc = await LocationService.getCurrentLocationData();
+        if (loc.success) {
+          setCurrentLocation({ 
+            city: loc.city, 
+            lat: loc.lat, 
+            lon: loc.lon, 
+            accuracy: loc.accuracy 
+          });
+        }
+      } catch (err) {
+        console.error("Critical Init Error:", err);
+      } finally {
+        setIsAppReady(true);
       }
-      setIsAppReady(true);
     };
     init();
   }, []);
 
   const generateRandomNeed = React.useCallback(async () => {
-    if (isSleeping || (homeLat === 0 && homeLon === 0)) return;
+    // KORREKTUR: Bedürfnis-Generierung startet nur bei validen Heimatdaten
+    if (isSleeping || homeLat === 0 || homeLon === 0) return;
+    
     const toolIds = [1, 2, 3, 4, 5];
     const tool = toolIds[Math.floor(Math.random() * toolIds.length)];
     const delay = Math.random() * (Config.NEED_CONFIG.NEXT_NEED_DELAY_MAX - Config.NEED_CONFIG.NEXT_NEED_DELAY_MIN) + Config.NEED_CONFIG.NEXT_NEED_DELAY_MIN;
+    
     const trigger = calculateAwakeTrigger(delay);
     const need = { toolId: tool, timestamp: trigger.getTime() };
+    
     setActiveNeed(need);
     await StorageService.saveActiveNeed(need);
   }, [isSleeping, homeLat, homeLon]);
 
+  // Automatischer Start der Bedürfnisse, sobald die App bereit ist und ein Heimatort existiert
   React.useEffect(() => {
-    if (isAppReady && !activeNeed && !isSleeping && homeLat !== 0) generateRandomNeed();
+    if (isAppReady && !activeNeed && !isSleeping && homeLat !== 0) {
+      generateRandomNeed();
+    }
   }, [isAppReady, activeNeed, isSleeping, homeLat, generateRandomNeed]);
 
-  // --- INTERAKTION ---
+  // --- INTERAKTION MIT GPS-GUARD ---
   const processInteraction = (toolId) => {
     if (!isAppReady || isSleeping || !isNeedActive || toolId !== activeNeed.toolId) return { success: false };
+    
+    // GPS-GUARD: Verhindert Exploits durch Null-Koordinaten
+    if (currentLocation.lat === 0 || homeLat === 0) {
+      showDialog("Standort wird gesucht...", "Mixer braucht einen Moment, um sich zu orientieren. Bitte warte kurz.");
+      return { success: false };
+    }
     
     const dist = getDistanceFromLatLonInKm(homeLat, homeLon, currentLocation.lat, currentLocation.lon);
     
@@ -221,10 +242,15 @@ export function useGameEngine(showDialog) {
   return {
     count, logbook, userData, currentLocation, rewardEvent, isAppReady, processInteraction, 
     setUserData: async (d) => {
-      setUserData(d);
-      await StorageService.saveUserData(d);
-      setAdaptedLocation(null);
-      await StorageService.saveAdaptedLocation(null);
+      // DATEN-INTEGRITÄT: Nur speichern, wenn Koordinaten valide Zahlen sind
+      if (d && typeof d.lat === 'number' && d.lat !== 0) {
+        setUserData(d);
+        await StorageService.saveUserData(d);
+        setAdaptedLocation(null);
+        await StorageService.saveAdaptedLocation(null);
+      } else {
+        showDialog("Fehler", "Heimatort konnte nicht korrekt gespeichert werden. Bitte versuche es erneut.");
+      }
     },
     resetGame: async () => { 
       await StorageService.resetGameData(); 
