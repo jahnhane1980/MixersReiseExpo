@@ -2,7 +2,6 @@ import * as React from 'react';
 import { StorageService } from '../services/StorageService';
 import { LocationService } from '../services/LocationService';
 import { TimeService } from '../services/TimeService';
-import { NotificationService } from '../services/NotificationService'; 
 import { calculateEarnedHearts } from '../utils/gameLogic';
 import { getDistanceFromLatLonInKm } from '../utils/locationUtils';
 import { GameRules } from '../constants/GameRules'; 
@@ -30,6 +29,16 @@ export function useGameEngine(showDialog) {
 
   const isNeedActive = activeNeed && Date.now() >= activeNeed.timestamp;
 
+  // Effekte für saubere Persistenz
+  React.useEffect(() => {
+    if (isAppReady) StorageService.savePunktestand(count);
+  }, [count, isAppReady]);
+
+  React.useEffect(() => {
+    if (isAppReady && logbook.length > 0) StorageService.saveLogbook(logbook);
+  }, [logbook, isAppReady]);
+
+  // Zeit-Checks und Initialisierung (unverändert)
   React.useEffect(() => {
     if (activeNeed && !isNeedActive) {
       const delay = Math.max(activeNeed.timestamp - Date.now(), 0);
@@ -51,24 +60,29 @@ export function useGameEngine(showDialog) {
     let timer;
     if (activeNeed && isNeedActive) {
       const timeSinceNeed = Date.now() - activeNeed.timestamp;
-      const penaltyThreshold = Config.NEED_CONFIG.PENALTY_AFTER;
-      if (timeSinceNeed >= penaltyThreshold) setIsOverdue(true); 
+      if (timeSinceNeed >= Config.NEED_CONFIG.PENALTY_AFTER) setIsOverdue(true); 
       else {
         setIsOverdue(false);
-        timer = setTimeout(() => setIsOverdue(true), penaltyThreshold - timeSinceNeed);
+        timer = setTimeout(() => setIsOverdue(true), Config.NEED_CONFIG.PENALTY_AFTER - timeSinceNeed);
       }
     } else setIsOverdue(false);
     return () => { if (timer) clearTimeout(timer); };
   }, [activeNeed, isNeedActive]);
 
   React.useEffect(() => {
-    if (isJetlagged && isSleeping && currentLocation.lat !== 0) {
-      setIsJetlagged(false); 
-      const loc = { lat: currentLocation.lat, lon: currentLocation.lon };
-      setAdaptedLocation(loc);
-      StorageService.saveAdaptedLocation(loc);
-    }
-  }, [isJetlagged, isSleeping, currentLocation.lat, currentLocation.lon]);
+    const init = async () => {
+      const data = await StorageService.loadGameData();
+      setCount(data.punktestand);
+      setLogbook(data.logbook || []);
+      if (data.userData) setUserData(data.userData);
+      if (data.activeNeed) setActiveNeed(data.activeNeed);
+      if (data.adaptedLocation) setAdaptedLocation(data.adaptedLocation);
+      const loc = await LocationService.getCurrentLocationData();
+      if (loc.success) setCurrentLocation({ city: loc.city, lat: loc.lat, lon: loc.lon });
+      setIsAppReady(true);
+    };
+    init();
+  }, []);
 
   const calculateAwakeTrigger = React.useCallback((delayMs) => {
     const now = new Date();
@@ -100,57 +114,34 @@ export function useGameEngine(showDialog) {
     if (isAppReady && !activeNeed && !isSleeping && userData.lat !== 0) generateRandomNeed();
   }, [isAppReady, activeNeed, isSleeping, userData.lat, generateRandomNeed]);
 
-  React.useEffect(() => {
-    const check = async () => {
-      const baseLat = adaptedLocation ? adaptedLocation.lat : userData.lat;
-      const baseLon = adaptedLocation ? adaptedLocation.lon : userData.lon;
-      if (baseLat !== 0 && currentLocation.lat !== 0) {
-        const res = await TimeService.checkJetlag(currentLocation.lat, currentLocation.lon, baseLat, baseLon);
-        setIsJetlagged(res.isJetlagged);
-        setDebugInfo(`${adaptedLocation ? "Adaptiert" : "Heimat"} | Diff: ${res.diff}h | Tol: ${res.tolerance}h`);
-      }
-    };
-    check();
-  }, [userData.lat, userData.lon, currentLocation.lat, currentLocation.lon, adaptedLocation]);
-
-  React.useEffect(() => {
-    const init = async () => {
-      const data = await StorageService.loadGameData();
-      setCount(data.punktestand);
-      setLogbook(data.logbook || []);
-      if (data.userData) setUserData(data.userData);
-      if (data.activeNeed) setActiveNeed(data.activeNeed);
-      if (data.adaptedLocation) setAdaptedLocation(data.adaptedLocation);
-      const loc = await LocationService.getCurrentLocationData();
-      if (loc.success) setCurrentLocation({ city: loc.city, lat: loc.lat, lon: loc.lon });
-      setIsAppReady(true);
-    };
-    init();
-  }, []);
-
+  // Haupt-Logik: Prozessierung der Interaktion
   const processInteraction = (toolId) => {
-    if (isSleeping || !isNeedActive || toolId !== activeNeed.toolId) return { success: false };
+    // Falls die App noch nicht bereit ist oder kein Bedürfnis aktiv, brich ab
+    if (!isAppReady || isSleeping || !isNeedActive || toolId !== activeNeed.toolId) return { success: false };
+
     const dist = getDistanceFromLatLonInKm(userData.lat, userData.lon, currentLocation.lat, currentLocation.lon);
     const res = calculateEarnedHearts(toolId, dist, GameRules.TOOL_BASE_POINTS, GameRules.DISTANCE_THRESHOLDS, activeNeed);
     const earned = res.earnedHearts;
     
-    setCount(prev => {
-      const val = prev + earned;
-      StorageService.savePunktestand(val);
-      return val;
+    // Counter-Update
+    setCount(prev => prev + earned);
+
+    // KORREKTUR: amount ist jetzt der tatsächliche Wert (mind. 1 für Animation)
+    setRewardEvent({ 
+      id: Date.now() + Math.random(), 
+      amount: Math.abs(earned) || 1, 
+      isPenalty: res.isPenalty 
     });
 
-    setRewardEvent({ id: Date.now() + Math.random(), amount: Math.max(Math.abs(earned), 5), isPenalty: res.isPenalty });
-
+    // Logbuch-Update
     setLogbook(prev => {
-      let next;
       const idx = prev.findIndex(e => e.city === currentLocation.city);
       if (idx >= 0) {
-        next = [...prev];
+        const next = [...prev];
         next[idx] = { ...next[idx], count: next[idx].count + earned };
-      } else next = [...prev, { id: Date.now().toString(), city: currentLocation.city, count: earned }];
-      StorageService.saveLogbook(next);
-      return next;
+        return next;
+      } 
+      return [...prev, { id: Date.now().toString(), city: currentLocation.city, count: earned }];
     });
 
     setActiveNeed(null);
@@ -165,7 +156,6 @@ export function useGameEngine(showDialog) {
       setUserData(d);
       await StorageService.saveUserData(d);
       setAdaptedLocation(null);
-      await StorageService.saveAdaptedLocation(null);
     },
     resetGame: async () => { 
       await StorageService.resetGameData(); 
