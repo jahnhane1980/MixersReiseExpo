@@ -110,6 +110,14 @@ export default function App() {
         isSleeping={engine.isSleeping}
       />
       
+      {/* Nacht-Overlay mit Hinweistext */}
+      {engine.isSleeping && (
+        <View style={styles.nightOverlay} pointerEvents="none">
+          <Text style={styles.nightText}>Mixer schläft gerade... 😴</Text>
+          <Text style={styles.nightSubText}>Lass ihn am besten schlafen.</Text>
+        </View>
+      )}
+      
       {needsAddress && !isSettingsVisible && engine.isAppReady && (
         <View style={styles.addressLock}>
           <Text style={styles.addressLockTitle}>🏠 Willkommen!</Text>
@@ -130,6 +138,27 @@ export default function App() {
 
 const styles = StyleSheet.create({ 
   container: { flex: 1, backgroundColor: '#FFF' },
+  nightOverlay: { 
+    ...StyleSheet.absoluteFillObject, 
+    backgroundColor: Theme.colors.nightOverlay, 
+    zIndex: 1500,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20
+  },
+  nightText: {
+    color: Theme.colors.modalYellow,
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 10
+  },
+  nightSubText: {
+    color: Theme.colors.modalYellow,
+    fontSize: 16,
+    textAlign: 'center',
+    opacity: 0.8
+  },
   addressLock: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255, 247, 212, 0.95)', justifyContent: 'center', alignItems: 'center', zIndex: 2000, padding: 30 },
   addressLockTitle: { fontSize: 28, fontWeight: 'bold', color: Theme.colors.primaryBrown, marginBottom: 15, textAlign: 'center' },
   addressLockText: { fontSize: 18, color: Theme.colors.primaryBrown, textAlign: 'center', marginBottom: 35, lineHeight: 26 },
