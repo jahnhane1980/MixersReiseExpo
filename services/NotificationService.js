@@ -1,6 +1,8 @@
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+// FIX: Alert muss aus react-native importiert werden
+import { Platform, Alert } from 'react-native';
 
+// Greift NUR, wenn die App offen ist.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -14,11 +16,19 @@ export const NotificationService = {
    * Fordert Berechtigungen an und konfiguriert den Android-Kanal.
    */
   async requestPermissions() {
-    // FIX: requestPermissionsAsync fragt den User aktiv nach der Erlaubnis
-    const { status } = await Notifications.requestPermissionsAsync();
+    // FIX: Explizite iOS-Rechte anfordern
+    const { status } = await Notifications.requestPermissionsAsync({
+      ios: {
+        allowAlert: true,
+        allowBadge: true,
+        allowSound: true,
+      },
+    });
     
     if (status !== 'granted') {
       console.log("Benachrichtigungen wurden nicht erlaubt.");
+      // WICHTIG FÜR TESTS: Wenn man auf iOS einmal ablehnt, fragt der Dialog nie wieder.
+      // Man muss die Rechte dann manuell in den iPhone-Einstellungen aktivieren.
       return false;
     }
 
@@ -39,24 +49,29 @@ export const NotificationService = {
     try {
       await Notifications.cancelAllScheduledNotificationsAsync();
 
+      // FIX: Minimaler Puffer von 3 Sekunden, damit iOS den Trigger auch bei 
+      // schnellem Schließen der App verlässlich registrieren kann.
+      const safeSeconds = Math.max(Math.round(seconds), 3);
+const triggerDate = new Date(Date.now() + safeSeconds * 1000);
+      
+      // FIX: Robuste manuelle Formatierung, um Bugs der React Native JS-Engine zu umgehen
       await Notifications.scheduleNotificationAsync({
         content: {
           title: `🦄 ${title}`,
-          // Untertitel für iOS (eigene Zeile)
           subtitle: "Aktion erforderlich!", 
-          // Haupttext mit zwei Umbrüchen für bessere Sichtbarkeit auf Android
           body: `${body}\n\n🚀 TIPP: App manuell öffnen!`,
           sound: 'default',
+          // priority & channelId sind Android-only. iOS stört sich aber nicht daran.
           priority: 'high',
           channelId: 'mixer-urgent',
         },
         trigger: { 
           type: 'timeInterval',
-          seconds: Math.max(Math.round(seconds), 1),
+          seconds: safeSeconds,
           repeats: false 
         },
       });
-    } catch (error) {
+    } catch (error) {    
       console.error("NotificationService Error:", error);
     }
   },
